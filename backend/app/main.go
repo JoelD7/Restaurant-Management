@@ -1,15 +1,76 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"google.golang.org/grpc"
 )
 
+type Buyer struct {
+	name         string        `json:"name,omitempty"`
+	transactions []Transaction `json:"transactions,omitempty"`
+}
+
+type Transaction struct {
+	device string `json:"device,omitempty"`
+}
+
 func main() {
+	// ctx := context.Background()
+	dgraphClient := newClient()
+	// txn := dgraphClient.NewTxn()
+	// defer txn.Discard(ctx)
+
+	const q = `{
+		buyer(func: has(name)) {
+			name
+			transactions
+		}
+	}
+`
+
+	resp, err := dgraphClient.NewTxn().Query(context.Background(), q)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	type Root struct {
+		Buyers []Buyer `json:"buyer"`
+	}
+
+	var r Root
+	err = json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out, _ := json.MarshalIndent(r, "", "\t")
+	fmt.Printf("%s\n", out)
+
+}
+
+func newClient() *dgo.Dgraph {
+	// Dial a gRPC connection. The address to dial to can be configured when
+	// setting up the dgraph cluster.
+	d, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dc := api.NewDgraphClient(d)
+	return dgo.NewDgraphClient(dc)
+}
+
+func parseTransactions() {
 	req, err := http.NewRequest("GET", "https://kqxty15mpg.execute-api.us-east-1.amazonaws.com/transactions", nil)
 
 	if err != nil {
@@ -58,5 +119,4 @@ func main() {
 
 		fmt.Printf("transactionId: %s, buyerId: %s, ip: %s, device: %s, products: %s\n", transactionId, buyerId, ip, device, products)
 	}
-
 }

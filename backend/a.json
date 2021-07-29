@@ -1,0 +1,38 @@
+{
+  "data": {
+    "michaels_friends": [
+      {
+        "name": "Michael",
+        "age": 39,
+        "friend": [
+          {
+            "name": "Sarah"
+          },
+          {
+            "name": "Catalina"
+          }
+        ]
+      }
+    ]
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 80100,
+      "processing_ns": 839400,
+      "encoding_ns": 48200,
+      "assign_timestamp_ns": 907100,
+      "total_ns": 1942500
+    },
+    "txn": {
+      "start_ts": 10334
+    },
+    "metrics": {
+      "num_uids": {
+        "_total": 8,
+        "age": 1,
+        "friend": 1,
+        "name": 6
+      }
+    }
+  }
+}
