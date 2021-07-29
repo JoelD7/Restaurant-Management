@@ -16,19 +16,19 @@ import (
 )
 
 type Buyer struct {
-	name         string        `json:"name,omitempty"`
-	transactions []Transaction `json:"transactions,omitempty"`
+	Name         string        `json:"name,omitempty"`
+	Transactions []Transaction `json:"transactions,omitempty"`
 }
 
 type Transaction struct {
-	device string `json:"device,omitempty"`
+	Device string `json:"device,omitempty"`
 }
 
 func main() {
-	// ctx := context.Background()
+	ctx := context.Background()
 	dgraphClient := newClient()
-	// txn := dgraphClient.NewTxn()
-	// defer txn.Discard(ctx)
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
 
 	const q = `{
 		buyer(func: has(name)) {
@@ -38,7 +38,8 @@ func main() {
 	}
 `
 
-	resp, err := dgraphClient.NewTxn().Query(context.Background(), q)
+	resp, err := txn.Query(context.Background(), q)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func main() {
 func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
-	d, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
