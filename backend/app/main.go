@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -38,30 +37,30 @@ func main() {
 	}
 `
 
-	resp, err := txn.Query(context.Background(), q)
+	parseTransactions()
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	// resp, err := txn.Query(context.Background(), q)
 
-	type Root struct {
-		Buyers []Buyer `json:"buyer"`
-	}
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	var r Root
-	err = json.Unmarshal(resp.Json, &r)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// type Root struct {
+	// 	Buyers []Buyer `json:"buyer"`
+	// }
 
-	out, _ := json.MarshalIndent(r, "", "\t")
-	fmt.Printf("%s\n", out)
+	// var r Root
+	// err = json.Unmarshal(resp.Json, &r)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// out, _ := json.MarshalIndent(r, "", "\t")
+	// fmt.Printf("%s\n", out)
 
 }
 
 func newClient() *dgo.Dgraph {
-	// Dial a gRPC connection. The address to dial to can be configured when
-	// setting up the dgraph cluster.
 	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
@@ -89,7 +88,7 @@ func parseTransactions() {
 	}
 
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	transactions := strings.Split(string(body), "#")
 
@@ -107,7 +106,6 @@ func parseTransactions() {
 		productRgx := regexp.MustCompile(`\(`)
 
 		deviceIndex := deviceRgx.FindStringIndex(line[21 : size-1])[0]
-		fmt.Println(deviceIndex)
 		if deviceIndex == 0 {
 			continue
 		}

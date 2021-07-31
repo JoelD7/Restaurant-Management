@@ -19,35 +19,3 @@ type Transaction {
   date: DateTime
   products: [Product]!
 }
-# ======================
-  name: string! @search(exact)
-  age: int
-  transactions: [uid]
-  price: float!
-  buyer: [uid]! @hasInverse(field: transactions)
-  ip: string
-  device: string
-  date: datetime
-  products: [uid]!
-
-type Buyer {
-  id
-  name
-  age
-  transactions
-}
-
-type Product {
-  id
-  name
-  price
-}
-
-type Transaction {
-  id
-  buyer
-  ip
-  device
-  date
-  products
-}
