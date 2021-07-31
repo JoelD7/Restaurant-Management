@@ -1,21 +1,60 @@
 type Buyer {
-  id: ID!
-  name: String! @search(by: [exact])
-  age: Int
-  transactions: [Transaction]
+  BuyerId
+  Name
+  Date
+  Age
 }
 
 type Product {
-  id: ID!
-  name: String!
-  price: Float!
+  ProductId
+  Name
+  Date
+  Price
 }
 
 type Transaction {
-  id: ID!
-  buyer: Buyer! @hasInverse(field: transactions)
-  ip: String
-  device: String
-  date: DateTime
-  products: [Product]!
+  TransactionId
+  BuyerId
+  Ip
+  Device
+  Date
+  Products
 }
+
+Name: string @index(exact) .
+Date: datetime @index(year) .
+Age: int .
+ProductId: string @index(exact) .
+
+
+Price: float .
+TransactionId: string @index(exact) .
+Date: datetime @index(year) .
+BuyerId: string @index(exact) .
+Ip: string @index(exact) .
+Device: string .
+Products: [string] .
+
+{
+  q(func: eq(name@., "That Thing You Do!")){
+    name@.
+    initial_release_date
+    genre{
+      expand(_all_){
+            
+      }
+  }
+  starring{
+      expand(_all_){
+        
+      }
+		}
+  director: director.film{
+    	expand(_all_){}
+ 	}
+    
+    actor: actor.film{
+    	expand(_all_){}
+ 		 }
+}
+
