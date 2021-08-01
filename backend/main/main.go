@@ -7,12 +7,14 @@ import (
 	"io"
 	"log"
 	c "module/constants"
+	f "module/utils"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	d "github.com/shopspring/decimal"
 	"google.golang.org/grpc"
 )
 
@@ -21,6 +23,13 @@ type Buyer struct {
 	Name         string
 	Transactions []Transaction
 	Type         string `json:"dgraph.type,omitempty"`
+}
+
+type Product struct {
+	ProductId string
+	Name      string
+	Date      string
+	Price     d.Decimal
 }
 
 type Transaction struct {
@@ -38,11 +47,8 @@ var dgraphClient *dgo.Dgraph = newClient()
 
 func main() {
 	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
 
-	date := "2020-08-17T00:00:00Z"
-	fmt.Println(isDateRequestable(date, txn, c.TransactionType))
-	// fetchTransactions(txn)
+	defer txn.Discard(ctx)
 
 }
 
@@ -56,14 +62,37 @@ func newClient() *dgo.Dgraph {
 	return dgo.NewDgraphClient(dc)
 }
 
-func fetchTransactions(txn *dgo.Txn) {
-	jsonTransactions := parseTransactions()
+func persistBuyers(txn *dgo.Txn, dateStr string) {
+
+}
+
+func fetchBuyers(txn *dgo.Txn, dateStr string) {
+	req, err := http.NewRequest("GET", c.BuyersURL, nil)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	q := req.URL.Query()
+	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dateStr))
+	q.Add("date", dateAsTimestamp)
+}
+
+func persistTransactions(txn *dgo.Txn, dateStr string) {
+
+	if !isDateRequestable(dateStr, txn, c.TransactionType) {
+		fmt.Println("No need to fetch transactions.")
+		return
+	}
+
+	jsonTransactions := fetchTransactions(dateStr)
 
 	mutation := &api.Mutation{
 		SetJson:   jsonTransactions,
 		CommitNow: true,
 	}
 
+	fmt.Println("Saving transactions data...")
 	_, err := txn.Mutate(context.Background(), mutation)
 
 	if err != nil {
@@ -74,11 +103,13 @@ func fetchTransactions(txn *dgo.Txn) {
 }
 
 /*
-
- */
+	Determines if the database has information about the
+	requested node based on the date queried by the client.
+	In that case, a request to AWS is not necessary.
+*/
 func isDateRequestable(date string, txn *dgo.Txn, nodeType string) bool {
 	query := fmt.Sprintf(`{
-		transactions(func: type(%s)) @filter(eq(Date, "%s")){
+		q(func: type(%s)) @filter(eq(Date, "%s")){
 			uid
 		}
 	}`, nodeType, date)
@@ -98,17 +129,18 @@ func isDateRequestable(date string, txn *dgo.Txn, nodeType string) bool {
 	}
 }
 
-func parseTransactions() []byte {
-	var transactions []Transaction
+func fetchTransactions(dateStr string) []byte {
 
-	req, err := http.NewRequest("GET", "https://kqxty15mpg.execute-api.us-east-1.amazonaws.com/transactions", nil)
+	req, err := http.NewRequest("GET", c.TransactionsURL, nil)
 
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	q := req.URL.Query()
-	q.Add("date", "1624680000")
+	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dateStr))
+	q.Add("date", dateAsTimestamp)
+
 	req.URL.RawQuery = q.Encode()
 	query := req.URL.String()
 
@@ -121,6 +153,24 @@ func parseTransactions() []byte {
 	body, _ := io.ReadAll(resp.Body)
 
 	rawTransactions := strings.Split(string(body), "#")
+	var transactions []Transaction = parseTransactions(rawTransactions, dateStr)
+	rawJsonTransactions, err := json.Marshal(transactions)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	/*
+		Replace all appearances of the unicode null character: \u0000 with an
+		empty string.
+	*/
+	jsonTransactions := strings.Replace(string(rawJsonTransactions), "\\u0000", "", -1)
+	return []byte(jsonTransactions)
+
+}
+
+func parseTransactions(rawTransactions []string, dateStr string) []Transaction {
+	var transactions []Transaction
 	transactionsQty := len(rawTransactions)
 
 	for i := 0; i < transactionsQty; i++ {
@@ -154,25 +204,34 @@ func parseTransactions() []byte {
 			Ip:            ip,
 			Device:        device,
 			Products:      strings.Split(products, ","),
-			Date:          "2020-08-17",
-			Type:          "Transaction",
+			Date:          dateStr,
+			Type:          c.TransactionType,
 		}
 
 		transactions = append(transactions, newTransaction)
 
 	}
 
-	rawJsonTransactions, err := json.Marshal(transactions)
+	return transactions
+}
 
+func fetchTransactionsFromDB(txn *dgo.Txn, date string) []byte {
+	query := fmt.Sprintf(`{
+		transactions(func: type(Transaction)) @filter(eq(Date, "%s")){
+		  expand(_all_){
+			   expand(_all_){
+				expand(_all_){
+				  }
+			  } 
+		  }
+		}
+	  }
+	  `, date)
+
+	res, err := txn.Query(ctx, query)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error while fetching transactions from the DB: %v\n", err)
 	}
 
-	/*
-		Replace all appearances of the unicode null character: \u0000 with an
-		empty string.
-	*/
-	jsonTransactions := strings.Replace(string(rawJsonTransactions), "\\u0000", "", -1)
-	return []byte(jsonTransactions)
-
+	return res.Json
 }

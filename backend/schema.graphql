@@ -36,9 +36,17 @@ Device: string .
 Products: [string] .
 
 {
-  transactions(func: type(Transaction)) @filter(eq(Date, "2020-08-17T00:00:00Z")){
+  transactions(func: type(Transaction)){
+    expand(_all_){
+     	expand(_all_){
+      	expand(_all_){
+    		}
+    	} 
+    }
   }
 }
+
+
 
 
 
