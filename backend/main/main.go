@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	c "module/constants"
 	"net/http"
 	"regexp"
 	"strings"
@@ -32,13 +33,16 @@ type Transaction struct {
 	Type          string `json:"dgraph.type,omitempty"`
 }
 
+var ctx context.Context = context.Background()
+var dgraphClient *dgo.Dgraph = newClient()
+
 func main() {
-	ctx := context.Background()
-	dgraphClient := newClient()
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
-	fetchTransactions(txn)
+	date := "2020-08-17T00:00:00Z"
+	fmt.Println(isDateRequestable(date, txn, c.TransactionType))
+	// fetchTransactions(txn)
 
 }
 
@@ -67,6 +71,31 @@ func fetchTransactions(txn *dgo.Txn) {
 	}
 
 	fmt.Println("New transactions saved.")
+}
+
+/*
+
+ */
+func isDateRequestable(date string, txn *dgo.Txn, nodeType string) bool {
+	query := fmt.Sprintf(`{
+		transactions(func: type(%s)) @filter(eq(Date, "%s")){
+			uid
+		}
+	}`, nodeType, date)
+
+	res, err := txn.Query(ctx, query)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	resultSize := res.Metrics.NumUids["uid"]
+
+	if resultSize > 0 {
+		return false
+	} else {
+		return true
+	}
 }
 
 func parseTransactions() []byte {

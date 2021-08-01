@@ -36,25 +36,9 @@ Device: string .
 Products: [string] .
 
 {
-  q(func: eq(name@., "That Thing You Do!")){
-    name@.
-    initial_release_date
-    genre{
-      expand(_all_){
-            
-      }
+  transactions(func: type(Transaction)) @filter(eq(Date, "2020-08-17T00:00:00Z")){
   }
-  starring{
-      expand(_all_){
-        
-      }
-		}
-  director: director.film{
-    	expand(_all_){}
- 	}
-    
-    actor: actor.film{
-    	expand(_all_){}
- 		 }
 }
+
+
 
