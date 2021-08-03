@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -19,11 +18,11 @@ func main() {
 	defer txn.Discard(ctx)
 
 	dataLoader := &DataLoader{
-		dateStr: "2020-08-17T00:00:00Z",
+		dateStr: "2020-08-17T00:00:00.000Z",
 		txn:     txn,
 	}
 
-	fmt.Println(string(dataLoader.fetchBuyers()))
+	dataLoader.fetchProducts()
 
 	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 

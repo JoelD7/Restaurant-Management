@@ -30,6 +30,7 @@ type Product struct {
 	Name      string
 	Date      string
 	Price     d.Decimal
+	Type      string `json:"dgraph.type,omitempty"`
 }
 
 type Transaction struct {
@@ -45,6 +46,88 @@ type Transaction struct {
 type DataLoader struct {
 	dateStr string
 	txn     *dgo.Txn
+}
+
+func (dataLoader *DataLoader) fetchProducts() []byte {
+	if !dataLoader.isDateRequestable(c.ProductType) {
+		fmt.Println("Fetching products data from database...")
+		return dataLoader.fetchFromDB(c.ProductType)
+	}
+
+	req, err := http.NewRequest("GET", c.ProductURL, nil)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	q := req.URL.Query()
+	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
+	q.Add("date", dateAsTimestamp)
+
+	req.URL.RawQuery = q.Encode()
+	requestUrl := req.URL.String()
+
+	resp, err := http.Get(requestUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	rawProductsLines := strings.Split(string(body), "\n")
+	var products []Product = dataLoader.parseProducts(rawProductsLines)
+	jsonProducts, _ := json.Marshal(products)
+
+	dataLoader.persistProducts(jsonProducts)
+
+	return dataLoader.fetchFromDB(c.ProductType)
+}
+
+func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) []Product {
+	var products []Product
+
+	for _, line := range rawProductsLines {
+		if len(strings.Split(line, "'")) < 3 {
+			continue
+		}
+
+		id := strings.Split(line, "'")[0]
+		name := strings.Split(line, "'")[1]
+		price, _ := d.NewFromString(strings.Split(line, "'")[2])
+
+		newProduct := Product{
+			ProductId: id,
+			Name:      name,
+			Price:     price,
+			Date:      dataLoader.dateStr,
+			Type:      c.ProductType,
+		}
+
+		products = append(products, newProduct)
+	}
+
+	return products
+}
+
+func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) {
+	mutation := &api.Mutation{
+		SetJson:   jsonProducts,
+		CommitNow: true,
+	}
+
+	req := &api.Request{
+		Mutations: []*api.Mutation{mutation},
+		CommitNow: true,
+	}
+
+	fmt.Println("Saving products data in database...")
+	_, err := newClient().NewTxn().Do(context.Background(), req)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("New products data saved.")
 }
 
 func (dataLoader *DataLoader) fetchBuyers() []byte {
