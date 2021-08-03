@@ -48,10 +48,9 @@ type DataLoader struct {
 	txn     *dgo.Txn
 }
 
-func (dataLoader *DataLoader) fetchProducts() []byte {
+func (dataLoader *DataLoader) loadProducts() {
 	if !dataLoader.isDateRequestable(c.ProductType) {
-		fmt.Println("Fetching products data from database...")
-		return dataLoader.fetchFromDB(c.ProductType)
+		fmt.Printf("The products for date %s are already loaded.\n", dataLoader.dateStr)
 	}
 
 	req, err := http.NewRequest("GET", c.ProductURL, nil)
@@ -79,8 +78,6 @@ func (dataLoader *DataLoader) fetchProducts() []byte {
 	jsonProducts, _ := json.Marshal(products)
 
 	dataLoader.persistProducts(jsonProducts)
-
-	return dataLoader.fetchFromDB(c.ProductType)
 }
 
 func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) []Product {
@@ -130,10 +127,9 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) {
 	fmt.Println("New products data saved.")
 }
 
-func (dataLoader *DataLoader) fetchBuyers() []byte {
+func (dataLoader *DataLoader) loadBuyers() {
 	if !dataLoader.isDateRequestable(c.BuyerType) {
-		fmt.Println("Fetching buyers data from database...")
-		return dataLoader.fetchFromDB(c.BuyerType)
+		fmt.Printf("The buyers for date %s are already loaded.\n", dataLoader.dateStr)
 	}
 
 	req, err := http.NewRequest("GET", c.BuyersURL, nil)
@@ -164,9 +160,6 @@ func (dataLoader *DataLoader) fetchBuyers() []byte {
 
 	jsonBuyers, _ := dataLoader.marshalJSON(&buyers)
 	dataLoader.persistBuyers(jsonBuyers)
-
-	return dataLoader.fetchFromDB(c.BuyerType)
-
 }
 
 /*
@@ -218,11 +211,10 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) {
 	fmt.Println("New buyers data saved.")
 }
 
-func (dataLoader *DataLoader) fetchTransactions() []byte {
+func (dataLoader *DataLoader) loadTransactions() {
 	if !dataLoader.isDateRequestable(c.TransactionType) {
-		fmt.Println("Fetching transactions from database...")
+		fmt.Printf("The transactions for date %s are already loaded.\n", dataLoader.dateStr)
 
-		return dataLoader.fetchFromDB(c.TransactionType)
 	}
 
 	req, err := http.NewRequest("GET", c.TransactionsURL, nil)
@@ -260,8 +252,6 @@ func (dataLoader *DataLoader) fetchTransactions() []byte {
 	*/
 	jsonTransactions := strings.Replace(string(rawJsonTransactions), "\\u0000", "", -1)
 	dataLoader.persistTransactions([]byte(jsonTransactions))
-
-	return dataLoader.fetchFromDB(c.TransactionType)
 
 }
 
