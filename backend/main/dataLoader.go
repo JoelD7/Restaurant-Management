@@ -14,18 +14,49 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	d "github.com/shopspring/decimal"
 )
+
+type Buyer struct {
+	BuyerId string `json:"id,omitempty"`
+	Age     int
+	Name    string
+	Type    string `json:"dgraph.type,omitempty"`
+}
+
+type UnmarshalBuyer{
+	BuyerId string `json:"id,omitempty"`
+	Age     int
+	Name    string
+}
+
+type Product struct {
+	ProductId string
+	Name      string
+	Date      string
+	Price     d.Decimal
+}
+
+type Transaction struct {
+	TransactionId string
+	BuyerId       string
+	Ip            string
+	Device        string
+	Products      []string
+	Date          string
+	Type          string `json:"dgraph.type,omitempty"`
+}
 
 type DataLoader struct {
 	dateStr string
 	txn     *dgo.Txn
 }
 
-func (dataLoader *DataLoader) persistBuyers() {
-
-}
-
 func (dataLoader *DataLoader) fetchBuyers() {
+	if !dataLoader.isDateRequestable(c.BuyerType) {
+
+	}
+
 	req, err := http.NewRequest("GET", c.BuyersURL, nil)
 	if err != nil {
 		fmt.Println(err)
@@ -34,9 +65,39 @@ func (dataLoader *DataLoader) fetchBuyers() {
 	q := req.URL.Query()
 	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
 	q.Add("date", dateAsTimestamp)
+
+	req.URL.RawQuery = q.Encode()
+	requestUrl := req.URL.String()
+
+	resp, err := http.Get(requestUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var buyers []Buyer
+	uErr := json.Unmarshal(body, &buyers)
+	if uErr != nil {
+		log.Fatal(uErr)
+	}
+
+	out, _ := json.MarshalIndent(buyers, "", "\t")
+	fmt.Printf("%s\n", out)
+
+}
+
+func (dataLoader *DataLoader) persistBuyers() {
+
 }
 
 func (dataLoader *DataLoader) fetchTransactions() []byte {
+	if !dataLoader.isDateRequestable(c.TransactionType) {
+		fmt.Println("Fetching transactions from database...")
+
+		return dataLoader.fetchTransactionsFromDB()
+	}
 
 	req, err := http.NewRequest("GET", c.TransactionsURL, nil)
 
@@ -144,11 +205,6 @@ func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Tran
 }
 
 func (dataLoader *DataLoader) persistTransactions() {
-
-	if !dataLoader.isDateRequestable(c.TransactionType) {
-		fmt.Println("No need to fetch transactions.")
-		return
-	}
 
 	jsonTransactions := dataLoader.fetchTransactions()
 
