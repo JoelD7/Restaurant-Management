@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -22,7 +23,7 @@ func main() {
 		txn:     txn,
 	}
 
-	dataLoader.fetchBuyers()
+	fmt.Println(string(dataLoader.fetchBuyers()))
 
 	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 
