@@ -10,9 +10,9 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
 	"google.golang.org/grpc"
 )
 
@@ -91,7 +91,8 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 		txn:     txn,
 	}
 
-	dataLoader.loadRestaurantData()
+	writter.Write([]byte(dataLoader.loadRestaurantData()))
+	writter.Header().Set("Content-Type", "text/plain")
 
 	if !ok {
 		http.Error(writter, http.StatusText(http.StatusUnprocessableEntity),

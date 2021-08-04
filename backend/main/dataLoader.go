@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
@@ -48,15 +49,32 @@ type DataLoader struct {
 	txn     *dgo.Txn
 }
 
-func (dataLoader *DataLoader) loadRestaurantData() {
+func (dataLoader *DataLoader) loadRestaurantData() string {
 	if !dataLoader.isDateRequestable() {
 		fmt.Printf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
-		return
+		return fmt.Sprintf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
 	}
 
-	dataLoader.loadBuyers()
-	dataLoader.loadTransactions()
-	dataLoader.loadProducts()
+	functions := make([]func(), 0)
+	functions = append(functions, dataLoader.loadBuyers)
+	functions = append(functions, dataLoader.loadTransactions)
+	functions = append(functions, dataLoader.loadProducts)
+
+	waitGroup := sync.WaitGroup{}
+
+	for i := range functions {
+		waitGroup.Add(1)
+
+		go func(function func()) {
+			function()
+
+			waitGroup.Done()
+		}(functions[i])
+	}
+
+	waitGroup.Wait()
+
+	return "All data succesfully loaded"
 }
 
 func (dataLoader *DataLoader) loadProducts() {
@@ -252,33 +270,6 @@ func (dataLoader *DataLoader) loadTransactions() {
 	jsonTransactions := strings.Replace(string(rawJsonTransactions), "\\u0000", "", -1)
 	dataLoader.persistTransactions([]byte(jsonTransactions))
 
-}
-
-func (dataLoader *DataLoader) fetchFromDB(nodeType string) []byte {
-	query := fmt.Sprintf(`{
-		result(func: type(%s)) @filter(eq(Date, "%s")){
-		  expand(_all_){
-			   expand(_all_){
-				expand(_all_){
-				  }
-			  } 
-		  }
-		}
-	  }
-	  `, nodeType, dataLoader.dateStr)
-
-	queryReq := &api.Request{
-		Query:     query,
-		CommitNow: true,
-	}
-
-	res, err := newClient().NewTxn().Do(context.Background(), queryReq)
-
-	if err != nil {
-		fmt.Printf("Error while fetching data from the DB: %v\n", err)
-	}
-
-	return res.Json
 }
 
 func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Transaction {

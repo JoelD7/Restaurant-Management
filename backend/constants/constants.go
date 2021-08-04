@@ -1,7 +1,7 @@
 package constants
 
 const (
-	DateLayout      string = "2006-01-02T15:04:05.000Z"
+	DateLayout      string = "2006-01-02"
 	BuyerType       string = "Buyer"
 	ProductType     string = "Product"
 	TransactionType string = "Transaction"
