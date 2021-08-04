@@ -48,11 +48,19 @@ type DataLoader struct {
 	txn     *dgo.Txn
 }
 
-func (dataLoader *DataLoader) loadProducts() {
-	if !dataLoader.isDateRequestable(c.ProductType) {
-		fmt.Printf("The products for date %s are already loaded.\n", dataLoader.dateStr)
+func (dataLoader *DataLoader) loadRestaurantData() {
+	if !dataLoader.isDateRequestable() {
+		fmt.Printf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
+		return
 	}
 
+	dataLoader.loadBuyers()
+	dataLoader.loadTransactions()
+	dataLoader.loadProducts()
+}
+
+func (dataLoader *DataLoader) loadProducts() {
+	fmt.Println("Loading products...")
 	req, err := http.NewRequest("GET", c.ProductURL, nil)
 	if err != nil {
 		fmt.Println(err)
@@ -117,21 +125,17 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) {
 		CommitNow: true,
 	}
 
-	fmt.Println("Saving products data in database...")
 	_, err := newClient().NewTxn().Do(context.Background(), req)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("New products data saved.")
+	fmt.Println("Products loaded.")
 }
 
 func (dataLoader *DataLoader) loadBuyers() {
-	if !dataLoader.isDateRequestable(c.BuyerType) {
-		fmt.Printf("The buyers for date %s are already loaded.\n", dataLoader.dateStr)
-	}
-
+	fmt.Println("Loading buyers...")
 	req, err := http.NewRequest("GET", c.BuyersURL, nil)
 	if err != nil {
 		fmt.Println(err)
@@ -201,22 +205,17 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) {
 		CommitNow: true,
 	}
 
-	fmt.Println("Saving buyers data in database...")
 	_, err := newClient().NewTxn().Do(context.Background(), req)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("New buyers data saved.")
+	fmt.Println("Buyers loaded.")
 }
 
 func (dataLoader *DataLoader) loadTransactions() {
-	if !dataLoader.isDateRequestable(c.TransactionType) {
-		fmt.Printf("The transactions for date %s are already loaded.\n", dataLoader.dateStr)
-
-	}
-
+	fmt.Println("Loading transactions...")
 	req, err := http.NewRequest("GET", c.TransactionsURL, nil)
 
 	if err != nil {
@@ -335,14 +334,13 @@ func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) {
 		CommitNow: true,
 	}
 
-	fmt.Println("Saving transactions data...")
 	_, err := dataLoader.txn.Mutate(context.Background(), mutation)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("New transactions saved.")
+	fmt.Println("Transactions loaded.")
 }
 
 /*
@@ -350,12 +348,12 @@ func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) {
 	requested node based on the date queried by the client.
 	In that case, a request to AWS is not necessary.
 */
-func (dataLoader *DataLoader) isDateRequestable(nodeType string) bool {
+func (dataLoader *DataLoader) isDateRequestable() bool {
 	query := fmt.Sprintf(`{
-		q(func: type(%s)) @filter(eq(Date, "%s")){
-			uid
-		}
-	}`, nodeType, dataLoader.dateStr)
+		q(func: eq(Date, "%s")){
+				  uid
+			  }
+	  }`, dataLoader.dateStr)
 
 	res, err := dataLoader.txn.Query(ctx, query)
 
