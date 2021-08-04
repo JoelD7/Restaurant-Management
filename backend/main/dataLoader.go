@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
@@ -340,11 +341,15 @@ func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) {
 	In that case, a request to AWS is not necessary.
 */
 func (dataLoader *DataLoader) isDateRequestable() bool {
+	//Parse the date to the format the database uses for dates: RFC3339
+	t, _ := time.Parse(c.DateLayout, dataLoader.dateStr)
+	date := t.Format(c.DateLayoutRFC3339)
+
 	query := fmt.Sprintf(`{
 		q(func: eq(Date, "%s")){
 				  uid
 			  }
-	  }`, dataLoader.dateStr)
+	  }`, date)
 
 	res, err := dataLoader.txn.Query(ctx, query)
 
