@@ -38,8 +38,14 @@ func main() {
 		router.Post("/", loadRestaurantData)
 	})
 
-	router.Route("/buyers", func(router chi.Router) {
-		router.Get("/", getBuyers)
+	router.Route("/buyer", func(router chi.Router) {
+		router.Get("/all", getBuyers)
+
+		router.Route("/{buyerId}", func(router chi.Router) {
+			router.Use(BuyerCtx)
+			router.Get("/", getBuyer)
+		})
+
 	})
 
 	fmt.Printf("Server listening on port %s\n", port)

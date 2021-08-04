@@ -6,7 +6,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/go-chi/chi/v5"
 )
+
+type TransactionHistory struct {
+	Transactions []Transaction
+}
+
+type TransactionsForIps struct {
+	TransactionsForIps []Transaction
+}
+
+type RestaurantService struct {
+	txn *dgo.Txn
+}
 
 /*
 	Extracts the url parameter from the request and adds it to
@@ -76,4 +91,75 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 	}
 
 	writter.Write(res.Json)
+}
+
+func BuyerCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		writter.Header().Set("Content-Type", "application/json")
+
+		buyerId := chi.URLParam(request, "buyerId")
+
+		ctx := context.WithValue(request.Context(), "buyerId", buyerId)
+		next.ServeHTTP(writter, request.WithContext(ctx))
+	})
+}
+
+func getBuyer(writter http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	buyerId := ctx.Value("buyerId").(string)
+
+	buyerTransactions := getTransactionHistory(buyerId)
+	var buyerIps []string
+
+	for _, transaction := range buyerTransactions {
+		buyerIps = append(buyerIps, transaction.Ip)
+	}
+
+	transactionsForIps := getTransactionsForIps(buyerIps)
+}
+
+func getTransactionHistory(buyerId string) []Transaction {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	query := fmt.Sprintf(`{
+		transactions(func: type(Transaction)) 
+			@filter(eq(BuyerId, "%s")) {
+			  expand(_all_){}
+		}
+	  }`, buyerId)
+
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while retrieving transaction history for buyer %s: %v\n", buyerId, err)
+	}
+
+	var transactionHistory TransactionHistory
+
+	json.Unmarshal(res.Json, &transactionHistory)
+
+	return transactionHistory.Transactions
+}
+
+func getTransactionsForIps(ips []string) []Transaction {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	query := fmt.Sprintf(`{
+		transactionsForIps(func: type(Transaction))
+			@filter(anyofterms(Ip, "%s")) {
+			  expand(_all_){}
+		}
+	  }`, fmt.Sprint(ips))
+
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while retrieving transaction for the specified ip addresses: %v\n", err)
+	}
+
+	var transactionsForIps TransactionsForIps
+	json.Unmarshal(res.Json, &transactionsForIps)
+
+	return transactionsForIps.TransactionsForIps
+
 }

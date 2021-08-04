@@ -36,13 +36,9 @@ Device: string .
 Products: [string] .
 
 {
-  transactions(func: type(Transaction)){
-    expand(_all_){
-     	expand(_all_){
-      	expand(_all_){
-    		}
-    	} 
-    }
+  q(func: type(Transaction), first: 2) 
+    @filter(anyofterms(Products, "e835860f c3ea0a90")) {
+		expand(_all_){}
   }
 }
 
