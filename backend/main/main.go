@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -18,6 +19,14 @@ type RequestBody struct {
 	Date string `json:"date"`
 }
 
+type APIDescriptor struct {
+	Method      string
+	Endpoint    string
+	Body        string `json:"Body,omitempty"`
+	URLParam    string `json:"URLParam,omitempty"`
+	Description string
+}
+
 var ctx context.Context = context.Background()
 var dgraphClient *dgo.Dgraph = newClient()
 
@@ -31,6 +40,10 @@ func main() {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
+
+	router.Route("/", func(router chi.Router) {
+		router.Get("/", describeAPI)
+	})
 
 	router.Route("/restaurant-data", func(router chi.Router) {
 		router.Use(RestaurantCtx)
@@ -61,4 +74,36 @@ func newClient() *dgo.Dgraph {
 
 	dc := api.NewDgraphClient(d)
 	return dgo.NewDgraphClient(dc)
+}
+
+func describeAPI(writter http.ResponseWriter, request *http.Request) {
+	writter.Header().Set("Content-Type", "application/json")
+
+	var descriptor []APIDescriptor = []APIDescriptor{
+		{
+			Method:      "POST",
+			Endpoint:    "/restaurant-data",
+			Description: "Loads all restaurant related data of the specified date to the database.",
+			Body:        "'date' in yyyy-MM-DD format",
+		},
+		{
+			Method:      "GET",
+			Endpoint:    "/buyer/all",
+			Description: "Returns all the buyers currently saved on the database.",
+		},
+		{
+			Method:      "GET",
+			Endpoint:    "/buyer/{buyerId}",
+			Description: "Returns the buyer with the id 'buyerId'.",
+		},
+	}
+
+	jsonDescriptor, err := json.Marshal(descriptor)
+
+	if err != nil {
+		fmt.Printf("Error while marshalling API descriptor: %v\n", err)
+	}
+
+	writter.Write(jsonDescriptor)
+
 }

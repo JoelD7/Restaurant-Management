@@ -4,66 +4,66 @@ let buyerProducts =
   );
 
 let recommended = [
-  {
-    ProductId: "cd3de2cc",
-    Name: "Fully cooked ready pasta",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "5449",
-  },
-  {
-    ProductId: "44b04768",
-    Name: "Fat Free Refried Beans",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "3741",
-  },
-  {
-    ProductId: "e70d94f9",
-    Name: "Vegan noodle",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "7192",
-  },
-  {
-    ProductId: "52a8c80a",
-    Name: "Beef pot roast with gravy",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "3463",
-  },
-  {
-    ProductId: "b58d28f4",
-    Name: "Speedy mac",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "7355",
-  },
-  {
-    ProductId: "262f8a66",
-    Name: "Dehydrated soup greens",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "9949",
-  },
-  {
-    ProductId: "7c8bf4b4",
-    Name: "Seasoned white meat pulled chicken with bbq sauce",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "7171",
-  },
-  {
-    ProductId: "d60ff146",
-    Name: "Progresso Vegetable Classics Lentil Soup",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "9407",
-  },
-  {
-    ProductId: "1aeea6ef",
-    Name: "Steamed dumplings chicken & vegetable",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "8299",
-  },
-  {
-    ProductId: "371bf2f8",
-    Name: "Hot Dog Chili Sauce",
-    Date: "2020-08-17T00:00:00Z",
-    Price: "8786",
-  },
+    {
+        "ProductId": "990f5c21",
+        "Name": "The original chicken flavor ramen noodle soup",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "880"
+    },
+    {
+        "ProductId": "79787e4a",
+        "Name": "Parmesan Couscous Mix",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "9813"
+    },
+    {
+        "ProductId": "d41377ea",
+        "Name": "Deli caribbean-style chicken breast salad with mango chutney and roasted red peppers",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "5792"
+    },
+    {
+        "ProductId": "cd3de2cc",
+        "Name": "Fully cooked ready pasta",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "5449"
+    },
+    {
+        "ProductId": "371bf2f8",
+        "Name": "Hot Dog Chili Sauce",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "8786"
+    },
+    {
+        "ProductId": "7e658b37",
+        "Name": "CHEF BOYARDEE Spaghetti And Meatballs",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "4262"
+    },
+    {
+        "ProductId": "b1cb1f97",
+        "Name": "Hearty homestyle corned beef hash",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "9528"
+    },
+    {
+        "ProductId": "b6c4ff46",
+        "Name": "Five cheese thin & crispy crust pizza",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "3781"
+    },
+    {
+        "ProductId": "e4356fea",
+        "Name": "Fully cooked cajun style turkey",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "7714"
+    },
+    {
+        "ProductId": "57633cd5",
+        "Name": "Deluxe cheezy mac",
+        "Date": "2020-08-17T00:00:00Z",
+        "Price": "1480"
+    }
 ].map((product) => product.ProductId);
 
 function contains() {
@@ -79,4 +79,10 @@ function contains() {
   return result;
 }
 
-console.log(contains());
+recommended.push('990f5c21')
+let set = new Set(recommended)
+set.forEach((value)=>{
+    console.log(value);
+})
+
+

@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -33,9 +32,10 @@ type BuyerIdEndpoint struct {
 	RecommendedProducts []Product
 }
 
-type RestaurantService struct {
-	txn *dgo.Txn
-}
+type key string
+
+const buyerIdKey key = "buyerId"
+const dateKey key = "date"
 
 /*
 	Extracts the url parameter from the request and adds it to
@@ -57,14 +57,14 @@ func RestaurantCtx(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(request.Context(), "date", requestBody.Date)
+		ctx := context.WithValue(request.Context(), dateKey, requestBody.Date)
 		next.ServeHTTP(writter, request.WithContext(ctx))
 	})
 }
 
 func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	requestContext := request.Context()
-	date, ok := requestContext.Value("date").(string)
+	date, ok := requestContext.Value(dateKey).(string)
 
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
@@ -113,14 +113,14 @@ func BuyerCtx(next http.Handler) http.Handler {
 
 		buyerId := chi.URLParam(request, "buyerId")
 
-		ctx := context.WithValue(request.Context(), "buyerId", buyerId)
+		ctx := context.WithValue(request.Context(), buyerIdKey, buyerId)
 		next.ServeHTTP(writter, request.WithContext(ctx))
 	})
 }
 
 func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
-	buyerId := ctx.Value("buyerId").(string)
+	buyerId := ctx.Value(buyerIdKey).(string)
 
 	buyerTransactions := getTransactionHistory(buyerId)
 	var buyerIps []string
