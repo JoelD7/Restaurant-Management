@@ -20,6 +20,18 @@ import (
 )
 
 type Buyer struct {
+	BuyerId string
+	Age     int
+	Name    string
+	Date    string `json:"Date,omitempty"`
+	Type    string `json:"dgraph.type,omitempty"`
+}
+
+/*
+	Struct used to match the fields returned
+	from AWS.
+*/
+type BuyerUnmarshall struct {
 	BuyerId string `json:"id,omitempty"`
 	Age     int
 	Name    string
@@ -175,7 +187,7 @@ func (dataLoader *DataLoader) loadBuyers() {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
-	var buyers []Buyer
+	var buyers []BuyerUnmarshall
 	uErr := json.Unmarshal(body, &buyers)
 	if uErr != nil {
 		log.Fatal(uErr)
@@ -186,28 +198,14 @@ func (dataLoader *DataLoader) loadBuyers() {
 }
 
 /*
-	Custom marshaller to change the json tag of BuyerId field
-	to "BuyerId".
-
-	In the type declaration of the Buyer struct, the json tag of
-	said field is "id" so that it matches the data returned from
-	AWS. A change in the tag name is required so that the buyers json
-	matches the structure of the Buyer node in the database.
+	Convert BuyerUnmarshall to Buyer
 */
-func (dataLoader *DataLoader) marshalJSON(buyers *[]Buyer) ([]byte, error) {
-	type alias struct {
-		BuyerId string
-		Age     int
-		Name    string
-		Date    string `json:"Date,omitempty"`
-		Type    string `json:"dgraph.type,omitempty"`
-	}
-
-	var a []alias = []alias{}
+func (dataLoader *DataLoader) marshalJSON(buyers *[]BuyerUnmarshall) ([]byte, error) {
+	var a []Buyer = []Buyer{}
 	for _, e := range *buyers {
 		e.Type = c.BuyerType
 		e.Date = dataLoader.dateStr
-		a = append(a, alias(e))
+		a = append(a, Buyer(e))
 	}
 
 	return json.Marshal(&a)

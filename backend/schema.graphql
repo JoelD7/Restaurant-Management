@@ -35,13 +35,6 @@ Ip: string @index(exact) .
 Device: string .
 Products: [string] .
 
-{
-  q(func: type(Transaction), first: 2) 
-    @filter(anyofterms(Products, "e835860f c3ea0a90")) {
-		expand(_all_){}
-  }
-}
-
 
 
 

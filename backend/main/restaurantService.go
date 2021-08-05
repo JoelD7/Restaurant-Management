@@ -5,18 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
+	c "module/constants"
+	f "module/utils"
 	"net/http"
+	"time"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/go-chi/chi/v5"
 )
 
-type TransactionHistory struct {
+type TransactionHolder struct {
 	Transactions []Transaction
 }
 
-type TransactionsForIps struct {
-	TransactionsForIps []Transaction
+type ProductHolder struct {
+	Products []Product
+}
+
+type BuyersById struct {
+	Buyers []Buyer `json:"buyersById"`
+}
+
+type BuyerIdEndpoint struct {
+	TransactionHistory  []Transaction
+	BuyersWithSameIp    []Buyer
+	RecommendedProducts []Product
 }
 
 type RestaurantService struct {
@@ -116,6 +130,29 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	}
 
 	transactionsForIps := getTransactionsForIps(buyerIps)
+	var buyerIds []string
+
+	for _, transaction := range transactionsForIps {
+		buyerIds = append(buyerIds, transaction.BuyerId)
+	}
+
+	buyersById := getBuyersById(buyerIds)
+
+	recommendedProducts := getProductRecommendations(buyerTransactions)
+
+	dataToReturn := &BuyerIdEndpoint{
+		TransactionHistory:  buyerTransactions,
+		BuyersWithSameIp:    buyersById,
+		RecommendedProducts: recommendedProducts,
+	}
+
+	dataToReturnAsJson, err := json.Marshal(dataToReturn)
+
+	if err != nil {
+		fmt.Printf("Error while marshalling dataToReturn: %v\n", err)
+	}
+
+	writter.Write(dataToReturnAsJson)
 }
 
 func getTransactionHistory(buyerId string) []Transaction {
@@ -134,8 +171,7 @@ func getTransactionHistory(buyerId string) []Transaction {
 		fmt.Printf("Error while retrieving transaction history for buyer %s: %v\n", buyerId, err)
 	}
 
-	var transactionHistory TransactionHistory
-
+	var transactionHistory TransactionHolder
 	json.Unmarshal(res.Json, &transactionHistory)
 
 	return transactionHistory.Transactions
@@ -146,7 +182,7 @@ func getTransactionsForIps(ips []string) []Transaction {
 	defer txn.Discard(ctx)
 
 	query := fmt.Sprintf(`{
-		transactionsForIps(func: type(Transaction))
+		transactions(func: type(Transaction))
 			@filter(anyofterms(Ip, "%s")) {
 			  expand(_all_){}
 		}
@@ -157,9 +193,143 @@ func getTransactionsForIps(ips []string) []Transaction {
 		fmt.Printf("Error while retrieving transaction for the specified ip addresses: %v\n", err)
 	}
 
-	var transactionsForIps TransactionsForIps
+	var transactionsForIps TransactionHolder
 	json.Unmarshal(res.Json, &transactionsForIps)
 
-	return transactionsForIps.TransactionsForIps
+	return transactionsForIps.Transactions
 
+}
+
+func getBuyersById(buyerIds []string) []Buyer {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	query := fmt.Sprintf(`{
+		buyersById(func: type(Buyer))
+			@filter(anyofterms(BuyerId, "%s")) {
+			  BuyerId
+			  Age
+			  Name
+			  Date
+		}
+	  }`, fmt.Sprint(buyerIds))
+
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while retrieving buyers: %v\n", err)
+	}
+
+	var buyersById BuyersById
+	json.Unmarshal(res.Json, &buyersById)
+
+	return buyersById.Buyers
+}
+
+func getProductRecommendations(buyerTransactions []Transaction) []Product {
+	var boughtProducts []string
+
+	for _, transaction := range buyerTransactions {
+		boughtProducts = append(boughtProducts, transaction.Products...)
+	}
+
+	similarProductTransactions := getSimilarProductTransactions(boughtProducts)
+
+	var productIdsBuffer []string
+	for _, transaction := range similarProductTransactions {
+		productIdsBuffer = append(productIdsBuffer, transaction.Products...)
+	}
+
+	//Filter out bought products
+	productIds := filterBoughtProductIds(boughtProducts, productIdsBuffer)
+
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	query := fmt.Sprintf(`{
+		products(func: type(Product)) 
+			@filter(anyofterms(ProductId, "%s")) {
+			  expand(_all_){}
+		}
+	  }`, productIds)
+
+	productsRes, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while fetching products: %v\n", err)
+	}
+
+	var productHolder ProductHolder
+	json.Unmarshal(productsRes.Json, &productHolder)
+
+	recommendedProducts := filterRepeatedProducts(productHolder.Products)
+
+	return recommendedProducts
+}
+
+/*
+	Returns transactions that contain products specified in @boughtProducts
+*/
+func getSimilarProductTransactions(boughtProducts []string) []Transaction {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	query := fmt.Sprintf(`{
+		transactions(func: type(Transaction)) 
+			@filter(anyofterms(Products, "%s")) {
+			  expand(_all_){}
+		}
+	  }`, boughtProducts)
+
+	transactionsRes, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while fetching transactions with products bought by this buyer: %v\n", err)
+	}
+
+	var transactionsForBuyerProductsRes TransactionHolder
+	json.Unmarshal(transactionsRes.Json, &transactionsForBuyerProductsRes)
+
+	return transactionsForBuyerProductsRes.Transactions
+}
+
+func filterBoughtProductIds(boughtProducts []string, productIdsBuffer []string) []string {
+	var filteredProductIds []string
+
+	for _, id := range productIdsBuffer {
+		if !f.ArrayContains(boughtProducts, id) && !f.ArrayContains(filteredProductIds, id) {
+			filteredProductIds = append(filteredProductIds, id)
+		}
+	}
+
+	return filteredProductIds
+}
+
+func filterRepeatedProducts(products []Product) []Product {
+	//Shuffle the array so that each time, new recommendations
+	//are generated.
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(products), func(i, j int) {
+		products[i], products[j] = products[j], products[i]
+	})
+
+	var addedIds []string
+	var result []Product
+
+	var max int
+	if len(products) < c.MaxProductRecommendations {
+		max = len(products)
+	} else {
+		max = c.MaxProductRecommendations
+	}
+
+	for _, product := range products {
+		if len(addedIds) >= max {
+			break
+		}
+
+		if !f.ArrayContains(addedIds, product.ProductId) {
+			addedIds = append(addedIds, product.ProductId)
+			result = append(result, product)
+		}
+	}
+
+	return result
 }

@@ -1,87 +1,82 @@
-const s = `90a1e574'Bûche fromage de Chèvre'9421
-26c0132c'Pasta Roni Garlic & Olive Oil Vermicelli 4.6 Ounce Paper Box'2286
-6e1725c5'Caribbean rice'1037
-ea66e5da'Roasted chicken flavored with carrots & herbs rice'2374
-2e3f28bb'Egg salad'1596
-92fce57b'Progresso Vegetable Classics Green Split Pea Soup'7707
-507b0f08'Whole grain brown rice'2166
-5d7723fc'Grilled italian style carved chicken breast'9192
-849c9359'Fire yakisoba spicy beef japanese home style noodles'4075
-7e54b626'13 bean soup mix'1345
-210dea49'Creamy tomato soup'495
-48c5d111'Fresh miso ramen meal'3760
-ccd36ecc'Cheese & pepperoni mini bagels topped with cheese'8570
-c7e251b1'Granulated chicken flavor soup base mix'8297
-c5f7170'Fresh homestyle cream of broccoli soup'1598
-ea5a8560'Organic hot & spicy lentils'1383
-88cca565'Vegetable Broth'3071
-c5f7170'Fresh homestyle cream of broccoli soup'1598
-1279047e'Cheese pizza sauce & cheese in a golden crust'1068
-68545175'Blue taco filling'6498
-15c136bf'Veetee'4334
-fecdbd4a'Beef stew'6574
-95989af7'Avocado salad ranch bowl'6352
-26f4bba7'Organic beef sipping bone broth'3485
-dd3767f3'Veggitaly fire roasted vegetables & goat cheese'5974
-1bd2c89e'Cauliflower crust cheese pizza'9159
-40c41075'Casa fiesta'1226
-b64f80e2'Formula 1'3847
-16791ea0'Ensaladíssima mediterránea con hortalizas y atún'6625
-c815310f'Foster farms'2316
-4e2b342c'Bone broth beef'4302
-a58d033d'Cauli flower crust margherita pizza'2463
-a28b45ef'"Campbell's condensed soup chicken & pasta"'6761
-c272d46a'Rice sides mushroom flavor'5531
-16791ea0'Ensaladíssima mediterránea con hortalizas y atún'6625
-1270c94a'98% fat free cream of chicken condensed soup'1590
-2f6c661a'Pumpkin soup'3433
-17864c5c'Organic spanish style rice'7831
-51ababcb'Pork with barbecue sauce'5207
-3a5e73e8'"Plant-based minestrone & saus'ge soup"'8722
-7bdff1c4'Maifun rice stick'4420
-`
+let buyerProducts =
+  "4bb66fdd fc5de8c5 e835860f c3ea0a90 c3ea0a90 eff231b9 86a98679 e1dbc2dc 1fa5e1cc 86a98679 bae389d5 e1dbc2dc 717b4e68 be034610 2f15ff16 b148e2fc 717b4e68 4d2befae f7898eb9 4ab4269e 3a5e73e8 c74008ac 836a1a0b 8324b3dc 44cdf60b ea6845d4 537bfb52 3485da63 6f1da24c def3c5e4 e835860f 9c56353a 90a1e574 22d225aa 41cabd38 bae389d5 def3c5e4 693fac8 1fa5e1cc 54eb94b4 ddcf5e1b 693fac8 c74008ac 9c56353a".split(
+    " "
+  );
 
-const s2 = `90a1e574'Bûche fromage de Chèvre'9421
-26c0132c'Pasta Roni Garlic & Olive Oil Vermicelli 4.6 Ounce Paper Box'2286
-6e1725c5'Caribbean rice'1037
-ea66e5da'Roasted chicken flavored with carrots & herbs rice'2374
-2e3f28bb'Egg salad'1596
-92fce57b'Progresso Vegetable Classics Green Split Pea Soup'7707
-507b0f08'Whole grain brown rice'2166
-5d7723fc'Grilled italian style carved chicken breast'9192
-849c9359'Fire yakisoba spicy beef japanese home style noodles'4075
-7e54b626'13 bean soup mix'1345
-210dea49'Creamy tomato soup'495
-48c5d111'Fresh miso ramen meal'3760
-ccd36ecc'Cheese & pepperoni mini bagels topped with cheese'8570
-c7e251b1'Granulated chicken flavor soup base mix'8297
-c5f7170'Fresh homestyle cream of broccoli soup'1598
-ea5a8560'Organic hot & spicy lentils'1383
-88cca565'Vegetable Broth'3071
-c5f7170'Fresh homestyle cream of broccoli soup'1598
-1279047e'Cheese pizza sauce & cheese in a golden crust'1068
-68545175'Blue taco filling'6498
-15c136bf'Veetee'4334
-fecdbd4a'Beef stew'6574
-95989af7'Avocado salad ranch bowl'6352
-26f4bba7'Organic beef sipping bone broth'3485
-dd3767f3'Veggitaly fire roasted vegetables & goat cheese'5974
-1bd2c89e'Cauliflower crust cheese pizza'9159
-40c41075'Casa fiesta'1226
-b64f80e2'Formula 1'3847
-16791ea0'Ensaladíssima mediterránea con hortalizas y atún'6625
-c815310f'Foster farms'2316
-4e2b342c'Bone broth beef'4302
-a58d033d'Cauli flower crust margherita pizza'2463
-a28b45ef'"Campbell's condensed soup chicken & pasta"'6761
-c272d46a'Rice sides mushroom flavor'5531
-16791ea0'Ensaladíssima mediterránea con hortalizas y atún'6625
-1270c94a'98% fat free cream of chicken condensed soup'1590
-2f6c661a'Pumpkin soup'3433
-17864c5c'Organic spanish style rice'7831
-51ababcb'Pork with barbecue sauce'5207
-3a5e73e8'"Plant-based minestrone & saus'ge soup"'8722
-7bdff1c4'Maifun rice stick'4420
-`
+let recommended = [
+  {
+    ProductId: "cd3de2cc",
+    Name: "Fully cooked ready pasta",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "5449",
+  },
+  {
+    ProductId: "44b04768",
+    Name: "Fat Free Refried Beans",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "3741",
+  },
+  {
+    ProductId: "e70d94f9",
+    Name: "Vegan noodle",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "7192",
+  },
+  {
+    ProductId: "52a8c80a",
+    Name: "Beef pot roast with gravy",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "3463",
+  },
+  {
+    ProductId: "b58d28f4",
+    Name: "Speedy mac",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "7355",
+  },
+  {
+    ProductId: "262f8a66",
+    Name: "Dehydrated soup greens",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "9949",
+  },
+  {
+    ProductId: "7c8bf4b4",
+    Name: "Seasoned white meat pulled chicken with bbq sauce",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "7171",
+  },
+  {
+    ProductId: "d60ff146",
+    Name: "Progresso Vegetable Classics Lentil Soup",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "9407",
+  },
+  {
+    ProductId: "1aeea6ef",
+    Name: "Steamed dumplings chicken & vegetable",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "8299",
+  },
+  {
+    ProductId: "371bf2f8",
+    Name: "Hot Dog Chili Sauce",
+    Date: "2020-08-17T00:00:00Z",
+    Price: "8786",
+  },
+].map((product) => product.ProductId);
 
-console.log(s.localeCompare(s2))
+function contains() {
+  let result = false;
+  
+  buyerProducts.forEach((id) => {
+    if (recommended.includes(id)) {
+      result = true;
+      return;
+    }
+  });
+
+  return result;
+}
+
+console.log(contains());
