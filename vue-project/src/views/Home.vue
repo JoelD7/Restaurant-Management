@@ -38,7 +38,7 @@
               class="datepicker"
               v-if="showDatePicker"
               v-model="date"
-              @change="onChange()"
+              @change="onDateChange()"
             ></v-date-picker>
 
             <v-sheet
@@ -46,8 +46,9 @@
               elevation="2"
               class="dateText"
               height="36"
-              width="200"
+              width="150"
             >
+              <p style="margin-bottom: 0px">{{ date }}</p>
             </v-sheet>
 
             <v-btn
@@ -81,6 +82,8 @@
         </v-col>
       </v-row>
     </v-container>
+
+    <h1 :style="{ color: Colors.BLUE }">Compradores</h1>
   </div>
 </template>
 
@@ -90,6 +93,7 @@ import { Colors } from "../assets/colors";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { faCalendarAlt } from "@fortawesome/free-regular-svg-icons";
 import { library } from "@fortawesome/fontawesome-svg-core";
+import { format } from "date-fns";
 
 library.add(faCalendarAlt);
 
@@ -101,13 +105,20 @@ export default Vue.extend({
     return {
       Colors: Colors,
       showDatePicker: false,
-      date: "2021-08-21",
+      format,
+      date: "2020-08-21",
     };
   },
 
+  created() {
+    this.date = format(Date.now(), "yyyy-MM-DD");
+  },
+
   methods: {
-    onChange() {
-      console.log(this.date);
+    onDateChange() {
+      setTimeout(() => {
+        this.showDatePicker = false;
+      }, 250);
     },
   },
 });
@@ -131,6 +142,9 @@ export default Vue.extend({
 .dateText {
   margin-left: 10px;
   border-radius: 50px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .calendar-btn {
@@ -139,14 +153,6 @@ export default Vue.extend({
 
 .main-container {
   font-family: "Poppins", sans-serif;
-  background: linear-gradient(
-    307deg,
-    #ffffff,
-    #ffffff 50%,
-    #004e88 50%,
-    #004e88
-  );
-  height: 100vh;
 }
 
 .restaurant-img {
@@ -166,10 +172,19 @@ export default Vue.extend({
 }
 
 .top-container {
+  margin-bottom: 20px;
   width: 100%;
   padding: 35px !important;
   color: white;
   max-width: 100% !important;
+  background: linear-gradient(
+    307deg,
+    #ffffff,
+    #ffffff 50%,
+    #004e88 50%,
+    #004e88
+  );
+  height: 100vh !important;
 }
 </style>
 
