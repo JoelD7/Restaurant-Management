@@ -1,5 +1,12 @@
 <template>
   <div class="main-container">
+    <div class="navbar">
+      <v-btn text href="/" class="navbar-btn">Inicio</v-btn>
+      <v-btn text ref="buyerRef" href="#buyers" class="navbar-btn"
+        >Compradores</v-btn
+      >
+    </div>
+
     <v-container class="top-container">
       <v-row style="margin-top: 100px" align="center" no-gutters>
         <!-- Title and date -->
@@ -26,9 +33,12 @@
                 >
                   <font-awesome-icon
                     size="lg"
+                    style="margin-right: 10px"
                     :color="Colors.BLUE"
                     :icon="['far', 'calendar-alt']"
                   />
+
+                  {{ date }}
                 </v-btn>
               </template>
               <span>Seleccione una fecha</span>
@@ -40,16 +50,6 @@
               v-model="date"
               @change="onDateChange()"
             ></v-date-picker>
-
-            <v-sheet
-              color="white"
-              elevation="2"
-              class="dateText"
-              height="36"
-              width="150"
-            >
-              <p style="margin-bottom: 0px">{{ date }}</p>
-            </v-sheet>
 
             <v-btn
               elevation="2"
@@ -63,6 +63,7 @@
           <v-row no-gutters style="margin-top: 30px">
             <v-btn
               elevation="2"
+              @click="goToBuyers"
               :style="{ color: Colors.BLUE_TEXT }"
               class="buyers-btn"
             >
@@ -83,7 +84,17 @@
       </v-row>
     </v-container>
 
-    <h1 :style="{ color: Colors.BLUE }">Compradores</h1>
+    <div class="page-container">
+      <h1 id="buyers" :style="{ color: Colors.BLUE }">Compradores</h1>
+
+      <v-data-table
+        @click:row="onTableRowClicked"
+        :headers="headers"
+        :items="buyers"
+        :items-per-page="5"
+        class="buyers-table"
+      ></v-data-table>
+    </div>
   </div>
 </template>
 
@@ -107,6 +118,40 @@ export default Vue.extend({
       showDatePicker: false,
       format,
       date: "2020-08-21",
+      headers: [
+        {
+          text: "ID",
+          value: "id",
+          class: "table-header",
+        },
+        {
+          text: "Name",
+          value: "name",
+          class: "table-header",
+        },
+        {
+          text: "Age",
+          value: "age",
+          class: "table-header",
+        },
+      ],
+      buyers: [
+        {
+          id: "asdf879",
+          name: "Ricardo",
+          age: 33,
+        },
+        {
+          id: "as85s6a",
+          name: "Maria",
+          age: 40,
+        },
+        {
+          id: "1ada2gl",
+          name: "Eduardo",
+          age: 29,
+        },
+      ],
     };
   },
 
@@ -120,6 +165,16 @@ export default Vue.extend({
         this.showDatePicker = false;
       }, 250);
     },
+
+    onTableRowClicked(item: any, metadata: any) {
+      this.$router.push({ path: `/buyer/${item.id}` });
+    },
+
+    goToBuyers() {
+      if (this.$refs && this.$refs.buyerRef) {
+        this.$refs.buyerRef.$el.click();
+      }
+    },
   },
 });
 </script>
@@ -130,6 +185,11 @@ export default Vue.extend({
   text-transform: capitalize !important;
   border-radius: 4px !important;
   font-weight: bold !important;
+}
+
+.buyers-table {
+  margin: 20px 0px 50px 0px;
+  width: 50%;
 }
 
 .datepicker {
@@ -155,6 +215,23 @@ export default Vue.extend({
   font-family: "Poppins", sans-serif;
 }
 
+.navbar {
+  display: flex;
+  position: absolute;
+  margin-top: 12px;
+}
+
+.navbar-btn {
+  color: white !important;
+  margin: 0px 5px !important;
+  text-transform: capitalize !important;
+}
+
+.page-container {
+  width: 90%;
+  margin: auto;
+}
+
 .restaurant-img {
   border-radius: 10px;
 }
@@ -165,6 +242,11 @@ export default Vue.extend({
   color: white !important;
   font-weight: bold !important;
   border-radius: 4px !important;
+}
+
+.table-header {
+  font-size: 18px !important;
+  color: #004e88 !important;
 }
 
 .title-col {
