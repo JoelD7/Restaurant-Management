@@ -1,5 +1,6 @@
 <template>
   <div class="main-container">
+    <!-- Navbar -->
     <div class="navbar">
       <v-btn text href="/" class="navbar-btn">Inicio</v-btn>
       <v-btn text ref="buyerRef" href="#buyers" class="navbar-btn"
@@ -179,7 +180,7 @@ export default Vue.extend({
 });
 </script>
 
-<style>
+<style scoped>
 .buyers-btn {
   background-color: white;
   text-transform: capitalize !important;
