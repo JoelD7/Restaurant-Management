@@ -109,6 +109,7 @@ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { faCalendarAlt } from "@fortawesome/free-regular-svg-icons";
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { format } from "date-fns";
+import { Buyer } from "../types";
 
 library.add(faCalendarAlt);
 
@@ -140,7 +141,7 @@ export default Vue.extend({
           class: "table-header",
         },
       ],
-      buyers: [],
+      buyers: [] as Buyer[],
     };
   },
 
@@ -161,6 +162,7 @@ export default Vue.extend({
     },
 
     goToBuyers() {
+      this.fetchBuyers();
       if (this.$refs && this.$refs.buyerRef) {
         this.$refs.buyerRef.$el.click();
       }
@@ -170,12 +172,7 @@ export default Vue.extend({
       this.loadingBuyers = true;
 
       const res = await fetch("http://localhost:9000/restaurant-data", {
-        credentials: "include",
         method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           date: this.date,
         }),
@@ -186,13 +183,24 @@ export default Vue.extend({
     },
 
     async fetchBuyers() {
+      this.loadingBuyers = true;
       const res = await fetch("http://localhost:9000/buyer/all", {
         credentials: "include",
       });
 
       res.json().then((r) => {
         this.loadingBuyers = false;
-        this.buyers = r.buyers;
+        let addedBuyers: string[] = [];
+        let buyersBuffer: Buyer[] = [];
+
+        r.buyers.forEach((b: any) => {
+          if (!addedBuyers.includes(b.BuyerId)) {
+            addedBuyers.push(b.BuyerId);
+            buyersBuffer.push(b);
+          }
+        });
+
+        this.buyers = buyersBuffer;
       });
     },
   },

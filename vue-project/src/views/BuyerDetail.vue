@@ -79,6 +79,7 @@ import Vue from "vue";
 import { Colors } from "../assets/colors";
 import TrasactionCard from "../components/TransactionCard.vue";
 import { transaction, dateFormat } from "../functions/functions";
+import { Buyer, Transaction } from "../types";
 
 export default Vue.extend({
   name: "BuyerDetail",
@@ -113,7 +114,7 @@ export default Vue.extend({
           class: "transaction-table-header",
         },
       ],
-      transactions: [],
+      transactions: [] as Transaction[],
       buyerHeaders: [
         {
           text: "ID",
@@ -131,7 +132,7 @@ export default Vue.extend({
           class: "transaction-table-header",
         },
       ],
-      buyersWithEqIp: [],
+      buyersWithEqIp: [] as Buyer[],
     };
   },
 
@@ -148,7 +149,17 @@ export default Vue.extend({
         return { ...t, Device, Date: date };
       });
 
-      this.buyersWithEqIp = r.BuyersWithSameIp;
+      let addedBuyers: string[] = [];
+      let buyersBuffer: Buyer[] = [];
+
+      r.BuyersWithSameIp.forEach((b: any) => {
+        if (!addedBuyers.includes(b.BuyerId)) {
+          addedBuyers.push(b.BuyerId);
+          buyersBuffer.push(b);
+        }
+      });
+
+      this.buyersWithEqIp = buyersBuffer;
       this.loadingBuyerData = false;
     });
   },

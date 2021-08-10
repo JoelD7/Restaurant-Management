@@ -13,3 +13,10 @@ export interface Product {
   Date: string;
   Price: number;
 }
+
+export interface Buyer {
+  BuyerId: string;
+  Name: string;
+  Date: string;
+  Age: number;
+}
