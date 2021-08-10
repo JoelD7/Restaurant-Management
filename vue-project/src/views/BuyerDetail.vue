@@ -1,38 +1,84 @@
 <template>
   <div class="main-container">
     <!-- Navbar -->
-    <div class="navbar">
-      <v-btn text href="/" class="navbar-btn">Inicio</v-btn>
-      <v-btn text ref="buyerRef" href="#buyers" class="navbar-btn"
+    <div class="navbar-buyer">
+      <v-btn text href="/" class="navbar-btn-buyer">Inicio</v-btn>
+      <v-btn text ref="buyerRef" href="#buyers" class="navbar-btn-buyer"
         >Compradores</v-btn
       >
     </div>
 
     <div class="page-container">
-      <h1 :style="{ color: Colors.BLUE }">Historial de Transacciones</h1>
+      <h2 :style="{ color: Colors.BLUE_TEXT }">
+        Comprador: <span style="font-weight: normal">{{ getBuyerName() }}</span>
+      </h2>
 
-      <v-data-table
-        @click:row="onTableRowClicked"
-        :headers="headers"
-        :items="transactions"
-        :items-per-page="10"
-        class="transactions-table"
-      ></v-data-table>
+      <!-- Transaction History -->
+      <div>
+        <h1 :style="{ color: Colors.BLUE }">Historial de Transacciones</h1>
 
-      <v-dialog width="700" v-model="openTransactionDialog">
-        <TrasactionCard :transaction="transaction" />
-      </v-dialog>
+        <div class="progress-container">
+          <v-progress-circular
+            :size="70"
+            v-if="loadingBuyerData"
+            indeterminate
+            :color="Colors.GREEN"
+          ></v-progress-circular>
+        </div>
+
+        <v-data-table
+          v-if="!loadingBuyerData"
+          @click:row="onTransactionClicked"
+          :headers="headers"
+          :items="transactions"
+          :items-per-page="10"
+          class="transactions-table"
+        ></v-data-table>
+
+        <v-dialog
+          width="700"
+          @click:outside="closeDialog"
+          v-model="openTransactionDialog"
+        >
+          <TrasactionCard
+            v-if="openTransactionDialog"
+            :transaction="transaction"
+          />
+        </v-dialog>
+      </div>
+
+      <!-- Buyers with equal IP -->
+      <div style="margin-top: 40px">
+        <h1 id="buyers" :style="{ color: Colors.BLUE }">Compradores</h1>
+
+        <div class="progress-container">
+          <v-progress-circular
+            :size="70"
+            v-if="loadingBuyerData"
+            indeterminate
+            :color="Colors.GREEN"
+          ></v-progress-circular>
+        </div>
+
+        <v-data-table
+          v-if="!loadingBuyerData"
+          @click:row="onBuyerClicked"
+          :headers="buyerHeaders"
+          :items="buyersWithEqIp"
+          :items-per-page="5"
+          style="width: 70%"
+        ></v-data-table>
+      </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { lightFormat, parseISO } from "date-fns";
-import { format } from "date-fns/esm";
+import { parseISO } from "date-fns";
 import Vue from "vue";
 import { Colors } from "../assets/colors";
 import TrasactionCard from "../components/TransactionCard.vue";
-import { transaction } from "../functions/functions";
+import { transaction, dateFormat } from "../functions/functions";
 
 export default Vue.extend({
   name: "BuyerDetail",
@@ -40,22 +86,24 @@ export default Vue.extend({
   data() {
     return {
       openTransactionDialog: false,
+      loadingBuyerData: true,
       transaction,
+      dateFormat,
       Colors,
       transactionsBuffer: [],
       headers: [
         {
-          text: "Number",
+          text: "Número",
           value: "TransactionId",
           class: "transaction-table-header",
         },
         {
-          text: "Date",
+          text: "Fecha",
           value: "Date",
           class: "transaction-table-header",
         },
         {
-          text: "Device",
+          text: "Dispositivo",
           value: "Device",
           class: "transaction-table-header",
         },
@@ -65,110 +113,70 @@ export default Vue.extend({
           class: "transaction-table-header",
         },
       ],
-      transactions: [
+      transactions: [],
+      buyerHeaders: [
         {
-          TransactionId: "00005f39cef1",
-          BuyerId: "2d8e2eb5",
-          Ip: "211.133.165.230",
-          Device: "linux",
-          Date: "2020-08-17T00:00:00Z",
-          Products: [
-            {
-              ProductId: "cd3de2cc",
-              Name: "Fully cooked ready pasta",
-              Date: "2020-08-17T00:00:00Z",
-              Price: 5449,
-            },
-            {
-              ProductId: "4bb66fdd",
-              Name: "Original mashed potatoes",
-              Date: "2020-08-17T00:00:00Z",
-              Price: 7506,
-            },
-          ],
+          text: "ID",
+          value: "BuyerId",
+          class: "transaction-table-header",
         },
         {
-          TransactionId: "00005f39d084",
-          BuyerId: "279917bb",
-          Ip: "126.151.131.211",
-          Device: "linux",
-          Date: "2020-08-17T00:00:00Z",
-          Products: [
-            {
-              ProductId: "44b04768",
-              Name: "Fat Free Refried Beans",
-              Date: "2020-08-17T00:00:00Z",
-              Price: 3741,
-            },
-            {
-              ProductId: "8324b3dc",
-              Name: "Vegan thai coconut big bowl of noodles",
-              Date: "2020-08-17T00:00:00Z",
-              Price: 986,
-            },
-            {
-              ProductId: "e70d94f9",
-              Name: "Vegan noodle",
-              Date: "2020-08-17T00:00:00Z",
-              Price: 7192,
-            },
-          ],
+          text: "Nombre",
+          value: "Name",
+          class: "transaction-table-header",
         },
         {
-          TransactionId: "00005f39d1d0",
-          BuyerId: "37a17758",
-          Ip: "82.89.238.170",
-          Device: "android",
-          Date: "2020-08-17T00:00:00Z",
-          Products: [
-            {
-              ProductId: "e835860f",
-              Name: "Progresso Traditional Cheese Tortellini in Garden Vegetable Tomato Soup",
-              Date: "2020-08-17T00:00:00Z",
-              Price: 2061,
-            },
-            {
-              ProductId: "90a1e574",
-              Name: "Bûche fromage de Chèvre",
-              Date: "2020-08-17T00:00:00Z",
-              Price: 9421,
-            },
-            {
-              ProductId: "bae389d5",
-              Name: '"Campbell',
-              Date: "2020-08-17T00:00:00Z",
-              Price: 0,
-            },
-          ],
+          text: "Edad",
+          value: "Age",
+          class: "transaction-table-header",
         },
       ],
+      buyersWithEqIp: [],
     };
   },
+
+  async mounted() {
+    const res = await fetch(
+      `http://localhost:9000/buyer/${this.$route.params.id}`
+    );
+
+    res.json().then((r) => {
+      this.transactions = r.TransactionHistory.map((t: any) => {
+        let Device = t.Device.slice(0, 1).toUpperCase() + t.Device.slice(1);
+        let date = dateFormat(new Date(t.Date));
+
+        return { ...t, Device, Date: date };
+      });
+
+      this.buyersWithEqIp = r.BuyersWithSameIp;
+      this.loadingBuyerData = false;
+    });
+  },
+
   methods: {
-    onTableRowClicked(item: any) {
+    getBuyerName() {
+      if (localStorage.getItem("buyerName") !== null) {
+        return localStorage.getItem("buyerName");
+      }
+
+      return "";
+    },
+    closeDialog() {
+      this.openTransactionDialog = false;
+    },
+    onTransactionClicked(item: any) {
       this.openTransactionDialog = true;
       this.transaction = this.transactions.filter(
         (t) => t.TransactionId === item.TransactionId
       )[0];
     },
-    format,
-    lightFormat,
+
+    onBuyerClicked(item: any) {
+      this.$router.push({ path: `/buyer/${item.BuyerId}` });
+      localStorage.setItem("buyerName", item.Name);
+      window.location.reload();
+    },
     parseISO,
-  },
-  created() {
-    let dateFormat = Intl.DateTimeFormat("es-ES", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      timeZone: "UTC",
-    }).format;
-
-    this.transactions = this.transactions.map((t) => {
-      let Device = t.Device.slice(0, 1).toUpperCase() + t.Device.slice(1);
-      let date = dateFormat(new Date(t.Date));
-
-      return { ...t, Device, Date: date };
-    });
   },
 });
 </script>
@@ -178,12 +186,12 @@ export default Vue.extend({
   font-family: "Poppins", sans-serif;
 }
 
-.navbar {
+.navbar-buyer {
   display: flex;
   margin-top: 12px;
 }
 
-.navbar-btn {
+.navbar-btn-buyer {
   color: #004e88 !important;
   margin: 0px 5px !important;
   text-transform: capitalize !important;
@@ -192,6 +200,13 @@ export default Vue.extend({
 .page-container {
   width: 90%;
   margin: 20px auto 50px auto;
+}
+
+.progress-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  width: 30%;
 }
 
 .transaction-table-header {

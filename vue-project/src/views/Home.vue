@@ -55,6 +55,8 @@
             <v-btn
               elevation="2"
               :style="{ 'background-color': Colors.GREEN }"
+              @click="loadData()"
+              :loading="loadingBuyers"
               class="sync-btn"
             >
               Sincronizar
@@ -65,6 +67,7 @@
             <v-btn
               elevation="2"
               @click="goToBuyers"
+              :disabled="loadingBuyers"
               :style="{ color: Colors.BLUE_TEXT }"
               class="buyers-btn"
             >
@@ -117,42 +120,27 @@ export default Vue.extend({
     return {
       Colors: Colors,
       showDatePicker: false,
+      loadingBuyers: false,
       format,
       date: "2020-08-21",
       headers: [
         {
           text: "ID",
-          value: "id",
+          value: "BuyerId",
           class: "table-header",
         },
         {
-          text: "Name",
-          value: "name",
+          text: "Nombre",
+          value: "Name",
           class: "table-header",
         },
         {
-          text: "Age",
-          value: "age",
+          text: "Edad",
+          value: "Age",
           class: "table-header",
         },
       ],
-      buyers: [
-        {
-          id: "asdf879",
-          name: "Ricardo",
-          age: 33,
-        },
-        {
-          id: "as85s6a",
-          name: "Maria",
-          age: 40,
-        },
-        {
-          id: "1ada2gl",
-          name: "Eduardo",
-          age: 29,
-        },
-      ],
+      buyers: [],
     };
   },
 
@@ -168,7 +156,8 @@ export default Vue.extend({
     },
 
     onTableRowClicked(item: any, metadata: any) {
-      this.$router.push({ path: `/buyer/${item.id}` });
+      this.$router.push({ path: `/buyer/${item.BuyerId}` });
+      localStorage.setItem("buyerName", item.Name);
     },
 
     goToBuyers() {
@@ -176,11 +165,41 @@ export default Vue.extend({
         this.$refs.buyerRef.$el.click();
       }
     },
+
+    async loadData() {
+      this.loadingBuyers = true;
+
+      const res = await fetch("http://localhost:9000/restaurant-data", {
+        credentials: "include",
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          date: this.date,
+        }),
+      });
+
+      console.log(res);
+      this.fetchBuyers();
+    },
+
+    async fetchBuyers() {
+      const res = await fetch("http://localhost:9000/buyer/all", {
+        credentials: "include",
+      });
+
+      res.json().then((r) => {
+        this.loadingBuyers = false;
+        this.buyers = r.buyers;
+      });
+    },
   },
 });
 </script>
 
-<style scoped>
+<style >
 .buyers-btn {
   background-color: white;
   text-transform: capitalize !important;

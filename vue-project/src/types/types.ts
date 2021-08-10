@@ -4,7 +4,7 @@ export type Transaction = {
   Ip: string;
   Device: string;
   Date: string;
-  Products: Product[];
+  Products: string[];
 };
 
 export interface Product {

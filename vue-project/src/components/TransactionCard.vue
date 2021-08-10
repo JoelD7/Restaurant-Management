@@ -34,17 +34,20 @@
             <p class="device">{{ transaction.Ip }}</p>
           </v-row>
         </v-col>
-
-        <!-- Right col -->
-        <v-col class="details-col" align-self="end"> </v-col>
       </v-row>
 
       <!-- Productos -->
       <div style="margin-top: 30px">
         <h3 :style="{ color: Colors.BLUE }">Productos</h3>
 
+        <v-progress-circular
+          v-if="loadingProducts"
+          indeterminate
+          :color="Colors.GREEN"
+        ></v-progress-circular>
+
         <div
-          v-for="product in transaction.Products"
+          v-for="product in products"
           :key="product.ProductId"
           style="margin: 10px 0px"
         >
@@ -82,7 +85,7 @@
 
 <script lang="ts">
 import Vue from "vue";
-import { Transaction } from "../types";
+import { Transaction, Product } from "../types";
 import { Colors } from "../assets/colors";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import {
@@ -111,6 +114,8 @@ export default Vue.extend({
       Colors,
       formatter,
       showProducts: false,
+      loadingProducts: false,
+      products: [] as Product[],
     };
   },
 
@@ -118,11 +123,28 @@ export default Vue.extend({
     transaction: Object as () => Transaction,
   },
 
+  async mounted() {
+    this.loadingProducts = true;
+    let productIds = this.transaction.Products.join(",");
+
+    const res = await fetch(
+      `http://localhost:9000/products?products=${productIds}`,
+      {
+        credentials: "include",
+      }
+    );
+
+    res.json().then((r) => {
+      this.loadingProducts = false;
+      this.products = r.products;
+    });
+  },
+
   methods: {
     getTransactionTotalCost() {
-      return this.transaction.Products.map((p) => p.Price).reduce(
-        (prev, cur) => prev + cur
-      );
+      return this.products
+        .map((p) => p.Price)
+        .reduce((prev, cur) => prev + cur);
     },
   },
 });
@@ -138,7 +160,6 @@ export default Vue.extend({
 
 .card-title {
   margin: 10px 0px 4px 0px !important;
-  /* font-size: 18px !important; */
 }
 
 .details-container {

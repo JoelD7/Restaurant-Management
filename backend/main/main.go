@@ -52,6 +52,7 @@ func main() {
 	})
 
 	router.Route("/buyer", func(router chi.Router) {
+		router.Use(BuyerCtx)
 		router.Get("/all", getBuyers)
 
 		router.Route("/{buyerId}", func(router chi.Router) {
@@ -59,6 +60,12 @@ func main() {
 			router.Get("/", getBuyer)
 		})
 
+	})
+
+	router.Route("/products", func(router chi.Router) {
+		router.Use(ProductsCtx)
+
+		router.Get("/", getProducts)
 	})
 
 	fmt.Printf("Server listening on port %s\n", port)

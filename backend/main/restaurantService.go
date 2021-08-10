@@ -9,6 +9,7 @@ import (
 	c "module/constants"
 	f "module/utils"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,6 +37,7 @@ type key string
 
 const buyerIdKey key = "buyerId"
 const dateKey key = "date"
+const productsKey key = "products"
 
 /*
 	Extracts the url parameter from the request and adds it to
@@ -43,6 +45,9 @@ const dateKey key = "date"
 */
 func RestaurantCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		writter.Header().Set("Access-Control-Allow-Credentials", "true")
+
 		body, err := io.ReadAll(request.Body)
 
 		var requestBody RequestBody
@@ -85,7 +90,6 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 }
 
 func getBuyers(writter http.ResponseWriter, request *http.Request) {
-	writter.Header().Set("Content-Type", "application/json")
 
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
@@ -107,8 +111,46 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 	writter.Write(res.Json)
 }
 
+func ProductsCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		writter.Header().Set("Access-Control-Allow-Credentials", "true")
+		writter.Header().Set("Content-Type", "application/json")
+
+		products := request.URL.Query().Get("products")
+
+		ctx := context.WithValue(request.Context(), productsKey, products)
+		next.ServeHTTP(writter, request.WithContext(ctx))
+	})
+}
+
+func getProducts(writter http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+	products := ctx.Value(productsKey).(string)
+	productList := strings.Split(products, ",")
+
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	query := fmt.Sprintf(`{
+		products(func: type(Product)) 
+			@filter(anyofterms(ProductId, "%s")) {
+			  expand(_all_){}
+		}
+	  }`, productList)
+
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while retrieving products: %v\n", err)
+	}
+
+	writter.Write(res.Json)
+}
+
 func BuyerCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		writter.Header().Set("Access-Control-Allow-Credentials", "true")
 		writter.Header().Set("Content-Type", "application/json")
 
 		buyerId := chi.URLParam(request, "buyerId")
