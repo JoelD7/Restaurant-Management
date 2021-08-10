@@ -11,24 +11,60 @@
     <div class="page-container">
       <h1 :style="{ color: Colors.BLUE }">Historial de Transacciones</h1>
 
-      <div v-for="transaction in transactions" :key="transaction.TransactionId">
+      <v-data-table
+        @click:row="onTableRowClicked"
+        :headers="headers"
+        :items="transactions"
+        :items-per-page="10"
+        class="transactions-table"
+      ></v-data-table>
+
+      <v-dialog width="700" v-model="openTransactionDialog">
         <TrasactionCard :transaction="transaction" />
-      </div>
+      </v-dialog>
     </div>
   </div>
 </template>
 
 <script lang="ts">
+import { lightFormat, parseISO } from "date-fns";
+import { format } from "date-fns/esm";
 import Vue from "vue";
 import { Colors } from "../assets/colors";
 import TrasactionCard from "../components/TransactionCard.vue";
+import { transaction } from "../functions/functions";
 
 export default Vue.extend({
   name: "BuyerDetail",
   components: { TrasactionCard },
   data() {
     return {
+      openTransactionDialog: false,
+      transaction,
       Colors,
+      transactionsBuffer: [],
+      headers: [
+        {
+          text: "Number",
+          value: "TransactionId",
+          class: "transaction-table-header",
+        },
+        {
+          text: "Date",
+          value: "Date",
+          class: "transaction-table-header",
+        },
+        {
+          text: "Device",
+          value: "Device",
+          class: "transaction-table-header",
+        },
+        {
+          text: "Ip",
+          value: "Ip",
+          class: "transaction-table-header",
+        },
+      ],
       transactions: [
         {
           TransactionId: "00005f39cef1",
@@ -108,10 +144,36 @@ export default Vue.extend({
       ],
     };
   },
+  methods: {
+    onTableRowClicked(item: any) {
+      this.openTransactionDialog = true;
+      this.transaction = this.transactions.filter(
+        (t) => t.TransactionId === item.TransactionId
+      )[0];
+    },
+    format,
+    lightFormat,
+    parseISO,
+  },
+  created() {
+    let dateFormat = Intl.DateTimeFormat("es-ES", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "UTC",
+    }).format;
+
+    this.transactions = this.transactions.map((t) => {
+      let Device = t.Device.slice(0, 1).toUpperCase() + t.Device.slice(1);
+      let date = dateFormat(new Date(t.Date));
+
+      return { ...t, Device, Date: date };
+    });
+  },
 });
 </script>
 
-<style scoped>
+<style >
 .main-container {
   font-family: "Poppins", sans-serif;
 }
@@ -130,5 +192,14 @@ export default Vue.extend({
 .page-container {
   width: 90%;
   margin: 20px auto 50px auto;
+}
+
+.transaction-table-header {
+  font-size: 18px !important;
+  color: #004e88 !important;
+}
+
+.transactions-table {
+  width: 70%;
 }
 </style>

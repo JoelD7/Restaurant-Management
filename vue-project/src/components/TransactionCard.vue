@@ -1,13 +1,14 @@
 <template>
   <v-sheet elevation="2" class="card">
-    <p :style="{ color: Colors.BLUE_TEXT }" class="card-title">
-      <b>Transac. No.:</b> {{ transaction.TransactionId }}
-    </p>
+    <h2 :style="{ color: Colors.BLUE_TEXT }" class="card-title">
+      Transac. No.:
+      <span style="font-weight: normal">{{ transaction.TransactionId }}</span>
+    </h2>
 
     <v-divider></v-divider>
 
-    <!-- Transaction details -->
     <v-container class="details-container">
+      <!-- Transaction details -->
       <v-row align="center" no-gutters>
         <!-- Left col -->
         <v-col class="details-col" style="margin-bottom: auto">
@@ -35,61 +36,46 @@
         </v-col>
 
         <!-- Right col -->
-        <v-col class="details-col" align-self="end">
-          <v-row
-            style="margin-top: 18px"
-            align="bottom"
-            no-gutters
-            justify="end"
-          >
-            <font-awesome-icon
-              size="lg"
-              style="margin-right: 10px"
-              :color="Colors.GREEN"
-              :icon="['fas', 'dollar-sign']"
-            />
-            <p style="margin-bottom: 0px; font-size: 18px">
-              <b>Total: </b>{{ formatter(getTransactionTotalCost()) }}
-            </p>
-          </v-row>
-
-          <v-row align="bottom" no-gutters justify="end">
-            <v-btn @click="showProducts = !showProducts" class="product-btn">
-              <font-awesome-icon
-                size="lg"
-                style="margin-right: 10px"
-                color="white"
-                v-bind:icon="
-                  showProducts ? ['fas', 'chevron-up'] : ['fas', 'chevron-down']
-                "
-              />
-
-              Ver Productos
-            </v-btn>
-          </v-row>
-        </v-col>
+        <v-col class="details-col" align-self="end"> </v-col>
       </v-row>
 
-      <v-divider v-if="showProducts"></v-divider>
+      <!-- Productos -->
+      <div style="margin-top: 30px">
+        <h3 :style="{ color: Colors.BLUE }">Productos</h3>
 
-      <div v-if="showProducts" style="margin-top: 10px">
-        <v-row
+        <div
           v-for="product in transaction.Products"
           :key="product.ProductId"
-          align="center"
-          no-gutters
+          style="margin: 10px 0px"
         >
-          <v-col>
-            <p class="product-detail">{{ product.Name }}</p>
-          </v-col>
+          <v-row align="center" no-gutters>
+            <v-col>
+              <p class="product-detail">{{ product.Name }}</p>
+            </v-col>
 
-          <v-col>
-            <v-row no-gutters justify="end">
-              <p class="product-detail">{{ formatter(product.Price) }}</p>
-            </v-row>
-          </v-col>
-        </v-row>
+            <v-col>
+              <v-row no-gutters justify="end">
+                <p class="product-detail">{{ formatter(product.Price) }}</p>
+              </v-row>
+            </v-col>
+          </v-row>
+
+          <v-divider></v-divider>
+        </div>
       </div>
+
+      <!-- Products Total Cost -->
+      <v-row style="margin-top: 18px" align="bottom" no-gutters justify="end">
+        <font-awesome-icon
+          size="lg"
+          style="margin-right: 10px"
+          :color="Colors.GREEN"
+          :icon="['fas', 'dollar-sign']"
+        />
+        <p style="margin-bottom: 0px; font-size: 18px">
+          <b>Total: </b>{{ formatter(getTransactionTotalCost()) }}
+        </p>
+      </v-row>
     </v-container>
   </v-sheet>
 </template>
@@ -145,14 +131,14 @@ export default Vue.extend({
 <style scoped>
 .card {
   border-radius: 10px;
-  width: 50%;
+  width: 95%;
   margin: 10px;
   padding: 15px;
 }
 
 .card-title {
   margin: 10px 0px 4px 0px !important;
-  font-size: 18px !important;
+  /* font-size: 18px !important; */
 }
 
 .details-container {
