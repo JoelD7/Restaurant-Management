@@ -158,7 +158,6 @@ export default Vue.extend({
 
     onTableRowClicked(item: any, metadata: any) {
       this.$router.push({ path: `/buyer/${item.BuyerId}` });
-      localStorage.setItem("buyerName", item.Name);
     },
 
     goToBuyers() {

@@ -9,13 +9,13 @@
     </div>
 
     <div class="page-container">
-      <h2 :style="{ color: Colors.BLUE_TEXT }">
-        Comprador: <span style="font-weight: normal">{{ getBuyerName() }}</span>
-      </h2>
+      <h3 :style="{ color: Colors.BLUE_TEXT }">
+        Comprador: <span style="font-weight: normal">{{ buyerName }}</span>
+      </h3>
 
       <!-- Transaction History -->
       <div>
-        <h1 :style="{ color: Colors.BLUE }">Historial de Transacciones</h1>
+        <h2 :style="{ color: Colors.BLUE }">Historial de Transacciones</h2>
 
         <div class="progress-container">
           <v-progress-circular
@@ -49,7 +49,7 @@
 
       <!-- Buyers with equal IP -->
       <div style="margin-top: 40px">
-        <h1 id="buyers" :style="{ color: Colors.BLUE }">Compradores</h1>
+        <h2 id="buyers" :style="{ color: Colors.BLUE }">Compradores</h2>
 
         <div class="progress-container">
           <v-progress-circular
@@ -68,6 +68,13 @@
           :items-per-page="5"
           style="width: 70%"
         ></v-data-table>
+      </div>
+
+      <!-- Recommended products -->
+      <div style="margin-top: 40px">
+        <h2 :style="{ color: Colors.BLUE }">
+          Productos que podrian interesar a {{ buyerName }}
+        </h2>
       </div>
     </div>
   </div>
@@ -90,6 +97,7 @@ export default Vue.extend({
       loadingBuyerData: true,
       transaction,
       dateFormat,
+      buyerName: "",
       Colors,
       transactionsBuffer: [],
       headers: [
@@ -136,45 +144,74 @@ export default Vue.extend({
     };
   },
 
-  async mounted() {
-    const res = await fetch(
-      `http://localhost:9000/buyer/${this.$route.params.id}`
-    );
+  watch: {
+    $route() {
+      this.fetchBuyer();
+    },
+  },
 
-    res.json().then((r) => {
-      this.transactions = r.TransactionHistory.map((t: any) => {
+  async mounted() {
+    this.fetchBuyer();
+  },
+
+  methods: {
+    async fetchBuyer() {
+      window.scrollTo(0, 0);
+
+      this.loadingBuyerData = true;
+
+      const res = await fetch(
+        `http://localhost:9000/buyer/${this.$route.params.id}`
+      );
+
+      res.json().then((r) => {
+        this.transactions = this.parseTransactions(r.TransactionHistory);
+        this.buyersWithEqIp = this.filterBuyers(r.BuyersWithSameIp);
+        this.loadingBuyerData = false;
+      });
+    },
+
+    /**
+     * Converts the date to 'DD/MM/yyyy' format and
+     * capitalizes the 'device' field.
+     */
+    parseTransactions(transactionHistory: any) {
+      return transactionHistory.map((t: any) => {
         let Device = t.Device.slice(0, 1).toUpperCase() + t.Device.slice(1);
         let date = dateFormat(new Date(t.Date));
 
         return { ...t, Device, Date: date };
       });
+    },
 
+    /**
+     * Filters out repeated buyers and the currently seen buyer.
+     */
+    filterBuyers(buyersWithSameIp: any): Buyer[] {
       let addedBuyers: string[] = [];
       let buyersBuffer: Buyer[] = [];
 
-      r.BuyersWithSameIp.forEach((b: any) => {
-        if (!addedBuyers.includes(b.BuyerId)) {
+      buyersWithSameIp.forEach((b: any) => {
+        if (
+          !addedBuyers.includes(b.BuyerId) &&
+          b.BuyerId !== this.$route.params.id
+        ) {
           addedBuyers.push(b.BuyerId);
           buyersBuffer.push(b);
         }
+
+        if (b.BuyerId === this.$route.params.id) {
+          this.buyerName = b.Name;
+        }
       });
 
-      this.buyersWithEqIp = buyersBuffer;
-      this.loadingBuyerData = false;
-    });
-  },
-
-  methods: {
-    getBuyerName() {
-      if (localStorage.getItem("buyerName") !== null) {
-        return localStorage.getItem("buyerName");
-      }
-
-      return "";
+      return buyersBuffer;
     },
+
     closeDialog() {
       this.openTransactionDialog = false;
     },
+
     onTransactionClicked(item: any) {
       this.openTransactionDialog = true;
       this.transaction = this.transactions.filter(
@@ -185,7 +222,6 @@ export default Vue.extend({
     onBuyerClicked(item: any) {
       this.$router.push({ path: `/buyer/${item.BuyerId}` });
       localStorage.setItem("buyerName", item.Name);
-      window.location.reload();
     },
     parseISO,
   },
