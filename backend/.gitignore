@@ -1,4 +1,4 @@
-.exe
-.ps1
+*.exe
+*.ps1
 test.*
-a.json
+a.json*
