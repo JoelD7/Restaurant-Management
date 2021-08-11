@@ -75,6 +75,21 @@
         <h2 :style="{ color: Colors.BLUE }">
           Productos que podrian interesar a {{ buyerName }}
         </h2>
+
+        <div class="progress-container">
+          <v-progress-circular
+            :size="70"
+            v-if="loadingBuyerData"
+            indeterminate
+            :color="Colors.GREEN"
+          ></v-progress-circular>
+        </div>
+
+        <div v-if="!loadingBuyerData" class="product-card-container">
+          <div v-for="product in recommendedProducts" :key="product.ProductId">
+            <ProductCard :product="product" />
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -85,12 +100,13 @@ import { parseISO } from "date-fns";
 import Vue from "vue";
 import { Colors } from "../assets/colors";
 import TrasactionCard from "../components/TransactionCard.vue";
+import ProductCard from "../components/ProductCard.vue";
 import { transaction, dateFormat } from "../functions/functions";
-import { Buyer, Transaction } from "../types";
+import { Buyer, Product, Transaction } from "../types";
 
 export default Vue.extend({
   name: "BuyerDetail",
-  components: { TrasactionCard },
+  components: { TrasactionCard, ProductCard },
   data() {
     return {
       openTransactionDialog: false,
@@ -141,6 +157,7 @@ export default Vue.extend({
         },
       ],
       buyersWithEqIp: [] as Buyer[],
+      recommendedProducts: [] as Product[],
     };
   },
 
@@ -167,6 +184,7 @@ export default Vue.extend({
       res.json().then((r) => {
         this.transactions = this.parseTransactions(r.TransactionHistory);
         this.buyersWithEqIp = this.filterBuyers(r.BuyersWithSameIp);
+        this.recommendedProducts = r.RecommendedProducts;
         this.loadingBuyerData = false;
       });
     },
@@ -247,6 +265,11 @@ export default Vue.extend({
 .page-container {
   width: 90%;
   margin: 20px auto 50px auto;
+}
+
+.product-card-container {
+  display: flex;
+  flex-flow: wrap;
 }
 
 .progress-container {

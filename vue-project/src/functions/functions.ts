@@ -1,6 +1,6 @@
 import { Transaction } from "@/types";
 
-export const formatter = Intl.NumberFormat("en-US", {
+export const currencyFormatter = Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   currencyDisplay: "symbol",

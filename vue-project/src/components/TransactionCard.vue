@@ -7,7 +7,7 @@
 
     <v-divider></v-divider>
 
-    <v-container class="details-container">
+    <v-container>
       <!-- Transaction details -->
       <v-row align="center" no-gutters>
         <!-- Left col -->
@@ -58,7 +58,9 @@
 
             <v-col>
               <v-row no-gutters justify="end">
-                <p class="product-detail">{{ formatter(product.Price) }}</p>
+                <p class="product-detail">
+                  {{ currencyFormatter(product.Price) }}
+                </p>
               </v-row>
             </v-col>
           </v-row>
@@ -76,7 +78,7 @@
           :icon="['fas', 'dollar-sign']"
         />
         <p style="margin-bottom: 0px; font-size: 18px">
-          <b>Total: </b>{{ formatter(getTransactionTotalCost()) }}
+          <b>Total: </b>{{ currencyFormatter(getTransactionTotalCost()) }}
         </p>
       </v-row>
     </v-container>
@@ -96,7 +98,7 @@ import {
   faDollarSign,
 } from "@fortawesome/free-solid-svg-icons";
 import { library } from "@fortawesome/fontawesome-svg-core";
-import { formatter } from "../functions/functions";
+import { currencyFormatter } from "../functions/functions";
 
 library.add(
   faDesktop,
@@ -112,7 +114,7 @@ export default Vue.extend({
   data() {
     return {
       Colors,
-      formatter,
+      currencyFormatter,
       showProducts: false,
       loadingProducts: false,
       products: [] as Product[],
@@ -160,9 +162,6 @@ export default Vue.extend({
 
 .card-title {
   margin: 10px 0px 4px 0px !important;
-}
-
-.details-container {
 }
 
 .details-col {
