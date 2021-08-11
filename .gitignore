@@ -14,8 +14,10 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Editor directories and files
+a.json
 test.*
 .idea
+*.ps1
 *.exe
 .vscode
 *.suo
