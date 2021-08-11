@@ -66,7 +66,7 @@
           :headers="buyerHeaders"
           :items="buyersWithEqIp"
           :items-per-page="5"
-          style="width: 70%"
+          class="buyers-table"
         ></v-data-table>
       </div>
 
@@ -247,6 +247,29 @@ export default Vue.extend({
 </script>
 
 <style >
+.buyers-table {
+  margin: 20px 0px 50px 0px;
+  width: 70%;
+}
+
+@media (max-width: 960px) {
+  .buyers-table {
+    width: 75%;
+  }
+}
+
+@media (max-width: 800px) {
+  .buyers-table {
+    width: 85%;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyers-table {
+    width: 100%;
+  }
+}
+
 .main-container {
   font-family: "Poppins", sans-serif;
 }
@@ -286,5 +309,23 @@ export default Vue.extend({
 
 .transactions-table {
   width: 70%;
+}
+
+@media (max-width: 960px) {
+  .transactions-table {
+    width: 80%;
+  }
+}
+
+@media (max-width: 800px) {
+  .transactions-table {
+    width: 90%;
+  }
+}
+
+@media (max-width: 640px) {
+  .transactions-table {
+    width: 100%;
+  }
 }
 </style>

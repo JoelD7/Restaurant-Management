@@ -11,7 +11,10 @@
     <v-container class="top-container">
       <v-row style="margin-top: 100px" align="center" no-gutters>
         <!-- Title and date -->
-        <v-col class="title-col">
+        <v-col
+          class="title-col"
+          :cols="$vuetify.breakpoint.width < 1085 ? 12 : 6"
+        >
           <span style="font-size: 45px; font-weight: bold"
             >Sistema de administración de Restaurante</span
           >
@@ -77,7 +80,10 @@
         </v-col>
 
         <!-- Picture -->
-        <v-col class="title-col">
+        <v-col
+          class="title-col"
+          :cols="$vuetify.breakpoint.width < 1085 ? 0 : 6"
+        >
           <v-img
             class="restaurant-img"
             max-height="700"
@@ -144,6 +150,12 @@ export default Vue.extend({
       buyers: [] as Buyer[],
     };
   },
+
+  // watch:{
+  //   $vuetify.breakpoint.width: function (val){
+
+  //   }
+  // },
 
   created() {
     this.date = format(Date.now(), "yyyy-MM-DD");
@@ -219,6 +231,24 @@ export default Vue.extend({
   width: 50%;
 }
 
+@media (max-width: 960px) {
+  .buyers-table {
+    width: 75%;
+  }
+}
+
+@media (max-width: 800px) {
+  .buyers-table {
+    width: 85%;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyers-table {
+    width: 100%;
+  }
+}
+
 .datepicker {
   position: absolute !important;
   top: 370px !important;
@@ -263,6 +293,27 @@ export default Vue.extend({
   border-radius: 10px;
 }
 
+@media (max-width: 1270px) {
+  .restaurant-img {
+    border-radius: 10px;
+    max-height: 600px !important;
+    max-width: 600px !important;
+  }
+}
+
+@media (max-width: 1140px) {
+  .restaurant-img {
+    max-height: 500px !important;
+    max-width: 500px !important;
+  }
+}
+
+@media (max-width: 1085px) {
+  .restaurant-img {
+    display: none !important;
+  }
+}
+
 .sync-btn {
   margin-left: 20px;
   text-transform: capitalize !important;
@@ -293,7 +344,14 @@ export default Vue.extend({
     #004e88 50%,
     #004e88
   );
-  height: 100vh !important;
+  min-height: 100vh !important;
+}
+
+@media (max-width: 1085px) {
+  .top-container {
+    min-height: 55vh !important;
+    background: #004e88;
+  }
 }
 </style>
 
