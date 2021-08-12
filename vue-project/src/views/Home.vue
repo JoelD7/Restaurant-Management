@@ -3,9 +3,7 @@
     <!-- Navbar -->
     <div class="navbar">
       <v-btn text href="/" class="navbar-btn">Inicio</v-btn>
-      <v-btn text ref="buyerRef" href="#buyers" class="navbar-btn"
-        >Compradores</v-btn
-      >
+      <v-btn text @click="goToBuyers" class="navbar-btn">Compradores</v-btn>
     </div>
 
     <v-container class="top-container">
@@ -95,13 +93,13 @@
     </v-container>
 
     <div class="page-container">
-      <h1 id="buyers" :style="{ color: Colors.BLUE }">Compradores</h1>
+      <h1 :style="{ color: Colors.BLUE }">Compradores</h1>
 
       <v-data-table
         @click:row="onTableRowClicked"
         :headers="headers"
         :items="buyers"
-        :items-per-page="5"
+        :items-per-page="10"
         class="buyers-table"
       ></v-data-table>
     </div>
@@ -116,6 +114,7 @@ import { faCalendarAlt } from "@fortawesome/free-regular-svg-icons";
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { format } from "date-fns";
 import { Buyer } from "../types";
+import { Endpoints } from "../constants/constants";
 
 library.add(faCalendarAlt);
 
@@ -125,11 +124,12 @@ export default Vue.extend({
   name: "Home",
   data() {
     return {
-      Colors: Colors,
+      Endpoints,
+      Colors,
       showDatePicker: false,
       loadingBuyers: false,
       format,
-      date: "2020-08-21",
+      date: "",
       headers: [
         {
           text: "ID",
@@ -151,14 +151,9 @@ export default Vue.extend({
     };
   },
 
-  // watch:{
-  //   $vuetify.breakpoint.width: function (val){
-
-  //   }
-  // },
-
   created() {
-    this.date = format(Date.now(), "yyyy-MM-DD");
+    let d = new Date(Date.now());
+    this.date = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   },
 
   methods: {
@@ -168,51 +163,52 @@ export default Vue.extend({
       }, 250);
     },
 
-    onTableRowClicked(item: any, metadata: any) {
+    onTableRowClicked(item: any) {
       this.$router.push({ path: `/buyer/${item.BuyerId}` });
     },
 
     goToBuyers() {
       this.fetchBuyers();
-      if (this.$refs && this.$refs.buyerRef) {
-        this.$refs.buyerRef.$el.click();
-      }
     },
 
     async loadData() {
       this.loadingBuyers = true;
 
-      const res = await fetch("http://localhost:9000/restaurant-data", {
+      const res = await fetch(this.Endpoints.RESTAURANT_DATA, {
         method: "POST",
         body: JSON.stringify({
           date: this.date,
         }),
       });
 
-      console.log(res);
       this.fetchBuyers();
     },
 
     async fetchBuyers() {
       this.loadingBuyers = true;
-      const res = await fetch("http://localhost:9000/buyer/all", {
+      const res = await fetch(this.Endpoints.ALL_BUYERS, {
         credentials: "include",
       });
 
       res.json().then((r) => {
         this.loadingBuyers = false;
-        let addedBuyers: string[] = [];
-        let buyersBuffer: Buyer[] = [];
-
-        r.buyers.forEach((b: any) => {
-          if (!addedBuyers.includes(b.BuyerId)) {
-            addedBuyers.push(b.BuyerId);
-            buyersBuffer.push(b);
-          }
-        });
-
-        this.buyers = buyersBuffer;
+        this.buyers = this.filterRepeatedBuyers(r.buyers);
+        window.scrollTo(0, document.body.scrollHeight);
       });
+    },
+
+    filterRepeatedBuyers(buyers: any[]): Buyer[] {
+      let addedBuyers: string[] = [];
+      let buyersBuffer: Buyer[] = [];
+
+      buyers.forEach((b: any) => {
+        if (!addedBuyers.includes(b.BuyerId)) {
+          addedBuyers.push(b.BuyerId);
+          buyersBuffer.push(b);
+        }
+      });
+
+      return buyersBuffer;
     },
   },
 });

@@ -99,6 +99,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { currencyFormatter } from "../functions/functions";
+import { Endpoints } from "../constants/constants";
 
 library.add(
   faDesktop,
@@ -113,6 +114,7 @@ export default Vue.extend({
   name: "TrasactionCard",
   data() {
     return {
+      Endpoints,
       Colors,
       currencyFormatter,
       showProducts: false,
@@ -130,7 +132,7 @@ export default Vue.extend({
     let productIds = this.transaction.Products.join(",");
 
     const res = await fetch(
-      `http://localhost:9000/products?products=${productIds}`,
+      `${this.Endpoints.PRODUCTS}?products=${productIds}`,
       {
         credentials: "include",
       }

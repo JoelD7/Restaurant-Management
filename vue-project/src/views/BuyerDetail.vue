@@ -96,19 +96,20 @@
 </template>
 
 <script lang="ts">
-import { parseISO } from "date-fns";
 import Vue from "vue";
 import { Colors } from "../assets/colors";
 import TrasactionCard from "../components/TransactionCard.vue";
 import ProductCard from "../components/ProductCard.vue";
 import { transaction, dateFormat } from "../functions/functions";
 import { Buyer, Product, Transaction } from "../types";
+import { Endpoints } from "../constants/constants";
 
 export default Vue.extend({
   name: "BuyerDetail",
   components: { TrasactionCard, ProductCard },
   data() {
     return {
+      Endpoints,
       openTransactionDialog: false,
       loadingBuyerData: true,
       transaction,
@@ -178,7 +179,7 @@ export default Vue.extend({
       this.loadingBuyerData = true;
 
       const res = await fetch(
-        `http://localhost:9000/buyer/${this.$route.params.id}`
+        `${this.Endpoints.BUYER}/${this.$route.params.id}`
       );
 
       res.json().then((r) => {
@@ -239,9 +240,7 @@ export default Vue.extend({
 
     onBuyerClicked(item: any) {
       this.$router.push({ path: `/buyer/${item.BuyerId}` });
-      localStorage.setItem("buyerName", item.Name);
     },
-    parseISO,
   },
 });
 </script>

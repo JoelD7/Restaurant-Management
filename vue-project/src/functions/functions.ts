@@ -14,6 +14,13 @@ export const dateFormat = Intl.DateTimeFormat("es-ES", {
   timeZone: "UTC",
 }).format;
 
+export const dateFormatISO = Intl.DateTimeFormat("es-ES", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "UTC",
+}).format;
+
 export const transaction: Transaction = {
   TransactionId: "00005f39cef1",
   BuyerId: "2d8e2eb5",
