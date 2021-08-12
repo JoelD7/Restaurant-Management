@@ -50,19 +50,15 @@ func RestaurantCtx(next http.Handler) http.Handler {
 		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 		writter.Header().Set("Access-Control-Allow-Headers", "*")
 
-		body, err := io.ReadAll(request.Body)
+		body, bodyReadErr := io.ReadAll(request.Body)
+
+		if bodyReadErr != nil {
+			http.Error(writter, bodyReadErr.Error(), http.StatusUnprocessableEntity)
+			return
+		}
 
 		var requestBody RequestBody
 		json.Unmarshal(body, &requestBody)
-
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		if err != nil {
-			http.Error(writter, http.StatusText(404), 404)
-			return
-		}
 
 		ctx := context.WithValue(request.Context(), dateKey, requestBody.Date)
 		next.ServeHTTP(writter, request.WithContext(ctx))
@@ -81,7 +77,15 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 		txn:     txn,
 	}
 
-	writter.Write([]byte(dataLoader.loadRestaurantData()))
+	res, loadErr := dataLoader.loadRestaurantData()
+	if loadErr != nil {
+		err := fmt.Errorf("error while loading restaurant data: %w", loadErr)
+
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	writter.Write([]byte(res))
 	writter.Header().Set("Content-Type", "text/plain")
 
 	if !ok {
@@ -92,7 +96,6 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 }
 
 func getBuyers(writter http.ResponseWriter, request *http.Request) {
-
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -107,7 +110,7 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 	res, err := txn.Query(ctx, query)
 
 	if err != nil {
-		fmt.Printf("An error has ocurred while trying to fetch all the buyers: %v\n", err)
+		http.Error(writter, err.Error(), http.StatusNotFound)
 	}
 
 	writter.Write(res.Json)
@@ -143,7 +146,7 @@ func getProducts(writter http.ResponseWriter, request *http.Request) {
 
 	res, err := txn.Query(ctx, query)
 	if err != nil {
-		fmt.Printf("Error while retrieving products: %v\n", err)
+		http.Error(writter, err.Error(), http.StatusNotFound)
 	}
 
 	writter.Write(res.Json)
@@ -166,23 +169,41 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	buyerId := ctx.Value(buyerIdKey).(string)
 
-	buyerTransactions := getTransactionHistory(buyerId)
+	buyerTransactions, transErr := getTransactionHistory(buyerId)
+	if transErr != nil {
+		err := fmt.Errorf("error while fetching buyer | %w", transErr)
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+	}
+
 	var buyerIps []string
 
 	for _, transaction := range buyerTransactions {
 		buyerIps = append(buyerIps, transaction.Ip)
 	}
 
-	transactionsForIps := getTransactionsForIps(buyerIps)
+	transactionsForIps, transForIpErr := getTransactionsForIps(buyerIps)
+	if transForIpErr != nil {
+		err := fmt.Errorf("error while fetching buyer | %w", transForIpErr)
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+	}
+
 	var buyerIds []string
 
 	for _, transaction := range transactionsForIps {
 		buyerIds = append(buyerIds, transaction.BuyerId)
 	}
 
-	buyersById := getBuyersById(buyerIds)
+	buyersById, buyerErr := getBuyersById(buyerIds)
+	if buyerErr != nil {
+		err := fmt.Errorf("error while fetching buyer | %w", buyerErr)
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+	}
 
-	recommendedProducts := getProductRecommendations(buyerTransactions)
+	recommendedProducts, productErr := getProductRecommendations(buyerTransactions)
+	if productErr != nil {
+		err := fmt.Errorf("error while fetching buyer | %w", productErr)
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+	}
 
 	dataToReturn := &BuyerIdEndpoint{
 		TransactionHistory:  buyerTransactions,
@@ -190,16 +211,17 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		RecommendedProducts: recommendedProducts,
 	}
 
-	dataToReturnAsJson, err := json.Marshal(dataToReturn)
+	dataToReturnAsJson, mErr := json.Marshal(dataToReturn)
 
-	if err != nil {
-		fmt.Printf("Error while marshalling dataToReturn: %v\n", err)
+	if mErr != nil {
+		err := fmt.Errorf("error while marshalling dataToReturn: %v", mErr)
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 	}
 
 	writter.Write(dataToReturnAsJson)
 }
 
-func getTransactionHistory(buyerId string) []Transaction {
+func getTransactionHistory(buyerId string) ([]Transaction, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -213,15 +235,21 @@ func getTransactionHistory(buyerId string) []Transaction {
 	res, err := txn.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("Error while retrieving transaction history for buyer %s: %v\n", buyerId, err)
+		return nil, err
 	}
 
 	var transactionHistory TransactionHolder
-	json.Unmarshal(res.Json, &transactionHistory)
+	uErr := json.Unmarshal(res.Json, &transactionHistory)
 
-	return transactionHistory.Transactions
+	if uErr != nil {
+		fmt.Printf("Error while unmarshalling transactions from database | %v", uErr)
+		return nil, uErr
+	}
+
+	return transactionHistory.Transactions, nil
 }
 
-func getTransactionsForIps(ips []string) []Transaction {
+func getTransactionsForIps(ips []string) ([]Transaction, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -235,16 +263,21 @@ func getTransactionsForIps(ips []string) []Transaction {
 	res, err := txn.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("Error while retrieving transaction for the specified ip addresses: %v\n", err)
+		return nil, err
 	}
 
 	var transactionsForIps TransactionHolder
-	json.Unmarshal(res.Json, &transactionsForIps)
+	uErr := json.Unmarshal(res.Json, &transactionsForIps)
+	if uErr != nil {
+		fmt.Printf("Error while unmarshalling transactions for the specified ip addresses | %v\n", uErr)
+		return nil, uErr
+	}
 
-	return transactionsForIps.Transactions
+	return transactionsForIps.Transactions, nil
 
 }
 
-func getBuyersById(buyerIds []string) []Buyer {
+func getBuyersById(buyerIds []string) ([]Buyer, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -261,22 +294,31 @@ func getBuyersById(buyerIds []string) []Buyer {
 	res, err := txn.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("Error while retrieving buyers: %v\n", err)
+		return nil, err
 	}
 
 	var buyersById BuyersById
-	json.Unmarshal(res.Json, &buyersById)
+	uErr := json.Unmarshal(res.Json, &buyersById)
+	if uErr != nil {
+		fmt.Printf("Error while unmarshalling buyersById | %v", uErr)
+		return nil, uErr
+	}
 
-	return buyersById.Buyers
+	return buyersById.Buyers, nil
 }
 
-func getProductRecommendations(buyerTransactions []Transaction) []Product {
+func getProductRecommendations(buyerTransactions []Transaction) ([]Product, error) {
 	var boughtProducts []string
 
 	for _, transaction := range buyerTransactions {
 		boughtProducts = append(boughtProducts, transaction.Products...)
 	}
 
-	similarProductTransactions := getSimilarProductTransactions(boughtProducts)
+	similarProductTransactions, productErr := getSimilarProductTransactions(boughtProducts)
+	if productErr != nil {
+		fmt.Println(productErr)
+		return nil, productErr
+	}
 
 	var productIdsBuffer []string
 	for _, transaction := range similarProductTransactions {
@@ -296,23 +338,28 @@ func getProductRecommendations(buyerTransactions []Transaction) []Product {
 		}
 	  }`, productIds)
 
-	productsRes, err := txn.Query(ctx, query)
-	if err != nil {
-		fmt.Printf("Error while fetching products: %v\n", err)
+	productsRes, queryErr := txn.Query(ctx, query)
+	if queryErr != nil {
+		fmt.Printf("Error while fetching products: %v\n", queryErr)
+		return nil, queryErr
 	}
 
 	var productHolder ProductHolder
-	json.Unmarshal(productsRes.Json, &productHolder)
+	uErr := json.Unmarshal(productsRes.Json, &productHolder)
+	if uErr != nil {
+		fmt.Printf("Error while unmarshaling products | %v\n", uErr)
+		return nil, uErr
+	}
 
 	recommendedProducts := filterRepeatedProducts(productHolder.Products)
 
-	return recommendedProducts
+	return recommendedProducts, nil
 }
 
 /*
 	Returns transactions that contain products specified in @boughtProducts
 */
-func getSimilarProductTransactions(boughtProducts []string) []Transaction {
+func getSimilarProductTransactions(boughtProducts []string) ([]Transaction, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -323,15 +370,21 @@ func getSimilarProductTransactions(boughtProducts []string) []Transaction {
 		}
 	  }`, boughtProducts)
 
-	transactionsRes, err := txn.Query(ctx, query)
-	if err != nil {
-		fmt.Printf("Error while fetching transactions with products bought by this buyer: %v\n", err)
+	transactionsRes, queryErr := txn.Query(ctx, query)
+	if queryErr != nil {
+		fmt.Printf("Error while fetching transactions with products bought by this buyer: %v\n", queryErr)
+		return nil, queryErr
 	}
 
 	var transactionsForBuyerProductsRes TransactionHolder
-	json.Unmarshal(transactionsRes.Json, &transactionsForBuyerProductsRes)
+	uErr := json.Unmarshal(transactionsRes.Json, &transactionsForBuyerProductsRes)
 
-	return transactionsForBuyerProductsRes.Transactions
+	if uErr != nil {
+		fmt.Printf("Error while unmarshalling transactions | %v\n", uErr)
+		return nil, uErr
+	}
+
+	return transactionsForBuyerProductsRes.Transactions, nil
 }
 
 func filterBoughtProductIds(boughtProducts []string, productIdsBuffer []string) []string {

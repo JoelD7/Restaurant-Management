@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	c "module/constants"
 	f "module/utils"
 	"net/http"
@@ -62,13 +61,19 @@ type DataLoader struct {
 	txn     *dgo.Txn
 }
 
-func (dataLoader *DataLoader) loadRestaurantData() string {
-	if !dataLoader.isDateRequestable() {
-		fmt.Printf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
-		return fmt.Sprintf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
+func (dataLoader *DataLoader) loadRestaurantData() (string, error) {
+	ok, dateErr := dataLoader.isDateRequestable()
+	if dateErr != nil {
+		fmt.Println(dateErr)
+		return "", dateErr
 	}
 
-	functions := make([]func(), 0)
+	if !ok {
+		fmt.Printf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
+		return fmt.Sprintf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr), nil
+	}
+
+	functions := make([]func() error, 0)
 	functions = append(functions, dataLoader.loadBuyers)
 	functions = append(functions, dataLoader.loadTransactions)
 	functions = append(functions, dataLoader.loadProducts)
@@ -78,7 +83,7 @@ func (dataLoader *DataLoader) loadRestaurantData() string {
 	for i := range functions {
 		waitGroup.Add(1)
 
-		go func(function func()) {
+		go func(function func() error) {
 			function()
 
 			waitGroup.Done()
@@ -87,14 +92,16 @@ func (dataLoader *DataLoader) loadRestaurantData() string {
 
 	waitGroup.Wait()
 
-	return "All data succesfully loaded"
+	return "All data succesfully loaded", nil
 }
 
-func (dataLoader *DataLoader) loadProducts() {
+func (dataLoader *DataLoader) loadProducts() error {
 	fmt.Println("Loading products...")
-	req, err := http.NewRequest("GET", c.ProductURL, nil)
-	if err != nil {
-		fmt.Println(err)
+
+	req, reqErr := http.NewRequest("GET", c.ProductURL, nil)
+	if reqErr != nil {
+		fmt.Println(reqErr)
+		return reqErr
 	}
 
 	q := req.URL.Query()
@@ -104,22 +111,42 @@ func (dataLoader *DataLoader) loadProducts() {
 	req.URL.RawQuery = q.Encode()
 	requestUrl := req.URL.String()
 
-	resp, err := http.Get(requestUrl)
-	if err != nil {
-		log.Fatal(err)
+	resp, respErr := http.Get(requestUrl)
+	if respErr != nil {
+		fmt.Printf("Error in response for GET request: '%s' | %v\n", requestUrl, respErr)
+		return respErr
 	}
 
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, resBodyError := io.ReadAll(resp.Body)
+	if resBodyError != nil {
+		fmt.Printf("Error while reading response body for request '%s' | %v\n", requestUrl, resBodyError)
+		return resBodyError
+	}
 
 	rawProductsLines := strings.Split(string(body), "\n")
-	var products []Product = dataLoader.parseProducts(rawProductsLines)
-	jsonProducts, _ := json.Marshal(products)
+	products, parseErr := dataLoader.parseProducts(rawProductsLines)
+	if parseErr != nil {
+		return fmt.Errorf("error while parsing products | %w", parseErr)
+	}
 
-	dataLoader.persistProducts(jsonProducts)
+	jsonProducts, jsonErr := json.Marshal(products)
+
+	if jsonErr != nil {
+		fmt.Printf("Error while marshalling products for database upload | %v\n", jsonErr)
+		return jsonErr
+	}
+
+	persistErr := dataLoader.persistProducts(jsonProducts)
+	if persistErr != nil {
+		fmt.Println(persistErr)
+		return persistErr
+	}
+
+	return nil
 }
 
-func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) []Product {
+func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Product, error) {
 	var products []Product
 
 	for _, line := range rawProductsLines {
@@ -129,7 +156,11 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) []Product
 
 		id := strings.Split(line, "'")[0]
 		name := strings.Split(line, "'")[1]
-		price, _ := d.NewFromString(strings.Split(line, "'")[2])
+		price, err := d.NewFromString(strings.Split(line, "'")[2])
+		if err != nil {
+			fmt.Printf("parseProducts: Error while casting products prices from string to decimal.Decimal | %v\n", err)
+			return nil, err
+		}
 
 		newProduct := Product{
 			ProductId: id,
@@ -142,10 +173,10 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) []Product
 		products = append(products, newProduct)
 	}
 
-	return products
+	return products, nil
 }
 
-func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) {
+func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {
 	mutation := &api.Mutation{
 		SetJson:   jsonProducts,
 		CommitNow: true,
@@ -159,17 +190,21 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) {
 	_, err := newClient().NewTxn().Do(context.Background(), req)
 
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("Error while persisting new products | %v\n", err)
+		return err
 	}
 
 	fmt.Println("Products loaded.")
+	return nil
 }
 
-func (dataLoader *DataLoader) loadBuyers() {
+func (dataLoader *DataLoader) loadBuyers() error {
 	fmt.Println("Loading buyers...")
-	req, err := http.NewRequest("GET", c.BuyersURL, nil)
-	if err != nil {
-		fmt.Println(err)
+
+	req, reqErr := http.NewRequest("GET", c.BuyersURL, nil)
+	if reqErr != nil {
+		fmt.Printf("Error in GET request '%s' | %v\n", c.BuyersURL, reqErr)
+		return reqErr
 	}
 
 	q := req.URL.Query()
@@ -179,22 +214,38 @@ func (dataLoader *DataLoader) loadBuyers() {
 	req.URL.RawQuery = q.Encode()
 	requestUrl := req.URL.String()
 
-	resp, err := http.Get(requestUrl)
-	if err != nil {
-		log.Fatal(err)
+	resp, resErr := http.Get(requestUrl)
+	if resErr != nil {
+		fmt.Printf("Error in response for GET request '%s' | %v\n", requestUrl, resErr)
+		return resErr
 	}
 
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, bodyReadErr := io.ReadAll(resp.Body)
+	if bodyReadErr != nil {
+		fmt.Printf("Error reading body of response for GET request '%s' | %v\n", requestUrl, bodyReadErr)
+		return bodyReadErr
+	}
 
 	var buyers []BuyerUnmarshall
 	uErr := json.Unmarshal(body, &buyers)
 	if uErr != nil {
-		log.Fatal(uErr)
+		fmt.Printf("Error while unmarshalling buyers object obtained from response for GET request '%s'\n| %v", requestUrl, uErr)
+		return uErr
 	}
 
-	jsonBuyers, _ := dataLoader.marshalJSON(&buyers)
-	dataLoader.persistBuyers(jsonBuyers)
+	jsonBuyers, mErr := dataLoader.marshalJSON(&buyers)
+	if mErr != nil {
+		fmt.Printf("Error while marshalling buyers object for database persistence |%v\n", mErr)
+		return mErr
+	}
+
+	persistErr := dataLoader.persistBuyers(jsonBuyers)
+	if persistErr != nil {
+		fmt.Println(persistErr)
+	}
+
+	return nil
 }
 
 /*
@@ -211,7 +262,7 @@ func (dataLoader *DataLoader) marshalJSON(buyers *[]BuyerUnmarshall) ([]byte, er
 	return json.Marshal(&a)
 }
 
-func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) {
+func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) error {
 	mutation := &api.Mutation{
 		SetJson:   jsonBuyers,
 		CommitNow: true,
@@ -225,18 +276,22 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) {
 	_, err := newClient().NewTxn().Do(context.Background(), req)
 
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("Error while persisting buyers to database: %v", err)
+		return err
 	}
 
 	fmt.Println("Buyers loaded.")
+	return nil
 }
 
-func (dataLoader *DataLoader) loadTransactions() {
+func (dataLoader *DataLoader) loadTransactions() error {
 	fmt.Println("Loading transactions...")
-	req, err := http.NewRequest("GET", c.TransactionsURL, nil)
 
-	if err != nil {
-		fmt.Println(err)
+	req, reqErr := http.NewRequest("GET", c.TransactionsURL, nil)
+
+	if reqErr != nil {
+		fmt.Printf("Error in GET request '%s' | %v \n", c.TransactionsURL, reqErr)
+		return reqErr
 	}
 
 	q := req.URL.Query()
@@ -246,20 +301,26 @@ func (dataLoader *DataLoader) loadTransactions() {
 	req.URL.RawQuery = q.Encode()
 	query := req.URL.String()
 
-	resp, err := http.Get(query)
-	if err != nil {
-		log.Fatal(err)
+	resp, resErr := http.Get(query)
+	if resErr != nil {
+		fmt.Printf("Error in response for GET request '%s' | %v\n", query, resErr)
+		return resErr
 	}
 
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, bodyErr := io.ReadAll(resp.Body)
+	if bodyErr != nil {
+		fmt.Printf("Error while reading response body of GET request '%s' | %v\n", query, bodyErr)
+		return bodyErr
+	}
 
 	rawTransactions := strings.Split(string(body), "#")
 	var transactions []Transaction = dataLoader.parseTransactions(rawTransactions)
-	rawJsonTransactions, err := json.Marshal(transactions)
+	rawJsonTransactions, mErr := json.Marshal(transactions)
 
-	if err != nil {
-		fmt.Println(err)
+	if mErr != nil {
+		fmt.Printf("Error while marshalling transactions for database persistence | %v\n", mErr)
+		return mErr
 	}
 
 	/*
@@ -267,7 +328,13 @@ func (dataLoader *DataLoader) loadTransactions() {
 		empty string.
 	*/
 	jsonTransactions := strings.Replace(string(rawJsonTransactions), "\\u0000", "", -1)
-	dataLoader.persistTransactions([]byte(jsonTransactions))
+	persistErr := dataLoader.persistTransactions([]byte(jsonTransactions))
+
+	if persistErr != nil {
+		fmt.Println(persistErr)
+	}
+
+	return nil
 
 }
 
@@ -317,8 +384,7 @@ func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Tran
 	return transactions
 }
 
-func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) {
-
+func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) error {
 	mutation := &api.Mutation{
 		SetJson:   jsonTransactions,
 		CommitNow: true,
@@ -327,10 +393,12 @@ func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) {
 	_, err := dataLoader.txn.Mutate(context.Background(), mutation)
 
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("Error while persisting transactions: %v\n", err)
+		return err
 	}
 
 	fmt.Println("Transactions loaded.")
+	return nil
 }
 
 /*
@@ -338,9 +406,14 @@ func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) {
 	requested node based on the date queried by the client.
 	In that case, a request to AWS is not necessary.
 */
-func (dataLoader *DataLoader) isDateRequestable() bool {
+func (dataLoader *DataLoader) isDateRequestable() (bool, error) {
 	//Parse the date to the format the database uses for dates: RFC3339
-	t, _ := time.Parse(c.DateLayout, dataLoader.dateStr)
+	t, parseErr := time.Parse(c.DateLayout, dataLoader.dateStr)
+	if parseErr != nil {
+		fmt.Printf("Error while parsing string '%s' to date | %v\n", dataLoader.dateStr, parseErr)
+		return false, parseErr
+	}
+
 	date := t.Format(c.DateLayoutRFC3339)
 
 	query := fmt.Sprintf(`{
@@ -349,17 +422,17 @@ func (dataLoader *DataLoader) isDateRequestable() bool {
 			  }
 	  }`, date)
 
-	res, err := dataLoader.txn.Query(ctx, query)
-
-	if err != nil {
-		fmt.Println(err)
+	res, resErr := dataLoader.txn.Query(ctx, query)
+	if resErr != nil {
+		fmt.Printf("Error while making query: '%s' to database | %v\n", query, resErr)
+		return false, resErr
 	}
 
 	resultSize := res.Metrics.NumUids["uid"]
 
 	if resultSize > 0 {
-		return false
+		return false, nil
 	} else {
-		return true
+		return true, nil
 	}
 }
