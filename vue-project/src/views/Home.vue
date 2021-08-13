@@ -28,7 +28,7 @@
                 <v-btn
                   rounded
                   elevation="2"
-                  @click="showDatePicker = !showDatePicker"
+                  @click="showDatePicker = true"
                   class="calendar-btn"
                   v-bind="attrs"
                   v-on="on"
@@ -46,12 +46,20 @@
               <span>Seleccione una fecha</span>
             </v-tooltip>
 
-            <v-date-picker
-              class="datepicker"
-              v-if="showDatePicker"
-              v-model="date"
-              @change="onDateChange()"
-            ></v-date-picker>
+            <v-dialog
+              width="500"
+              content-class="datepicker-dialog"
+              @click:outside="showDatePicker = false"
+              v-model="showDatePicker"
+            >
+              <v-date-picker
+                class="datepicker"
+                v-if="showDatePicker"
+                v-model="date"
+                :max="maxDate"
+                @change="onDateChange()"
+              ></v-date-picker>
+            </v-dialog>
 
             <v-btn
               elevation="2"
@@ -102,6 +110,8 @@
         :items-per-page="10"
         class="buyers-table"
       ></v-data-table>
+
+      <ErrorDialog :open="openErrorDialog" :message="errorMessage" />
     </div>
   </div>
 </template>
@@ -115,6 +125,9 @@ import { library } from "@fortawesome/fontawesome-svg-core";
 import { format } from "date-fns";
 import { Buyer } from "../types";
 import { Endpoints } from "../constants/constants";
+import Axios, { AxiosError } from "axios";
+import ErrorDialog from "../components/ErrorDialog.vue";
+import { handleRequestError } from "../functions/functions";
 
 library.add(faCalendarAlt);
 
@@ -125,8 +138,12 @@ export default Vue.extend({
   data() {
     return {
       Endpoints,
+      errorMessage: "",
       Colors,
       showDatePicker: false,
+      maxDate: "",
+      openErrorDialog: false,
+      openTransactionDialog: false,
       loadingBuyers: false,
       format,
       date: "",
@@ -151,9 +168,19 @@ export default Vue.extend({
     };
   },
 
+  components: { ErrorDialog },
+
   created() {
     let d = new Date(Date.now());
-    this.date = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    let month: number = d.getMonth() + 1;
+
+    this.date = `${d.getFullYear()}-${
+      month < 10 ? "0" + month : month
+    }-${d.getDate()}`;
+
+    this.maxDate = `${d.getFullYear()}-${
+      month < 10 ? "0" + month : month
+    }-${d.getDate()}`;
   },
 
   methods: {
@@ -171,31 +198,38 @@ export default Vue.extend({
       this.fetchBuyers();
     },
 
-    async loadData() {
+    loadData() {
       this.loadingBuyers = true;
 
-      const res = await fetch(this.Endpoints.RESTAURANT_DATA, {
-        method: "POST",
-        body: JSON.stringify({
-          date: this.date,
-        }),
-      });
-
-      this.fetchBuyers();
+      Axios.post(this.Endpoints.RESTAURANT_DATA, {
+        date: this.date,
+      })
+        .then(() => {
+          this.fetchBuyers();
+        })
+        .catch((error: AxiosError) => {
+          this.errorMessage = this.handleRequestError(error);
+          this.openErrorDialog = true;
+          this.loadingBuyers = false;
+        });
     },
 
-    async fetchBuyers() {
+    fetchBuyers() {
       this.loadingBuyers = true;
-      const res = await fetch(this.Endpoints.ALL_BUYERS, {
-        credentials: "include",
-      });
 
-      res.json().then((r) => {
-        this.loadingBuyers = false;
-        this.buyers = this.filterRepeatedBuyers(r.buyers);
-        window.scrollTo(0, document.body.scrollHeight);
-      });
+      Axios.get(this.Endpoints.ALL_BUYERS, { withCredentials: true })
+        .then((res) => {
+          this.loadingBuyers = false;
+          this.buyers = this.filterRepeatedBuyers(res.data.buyers);
+          window.scrollTo(0, document.body.scrollHeight);
+        })
+        .catch((error: AxiosError) => {
+          this.errorMessage = this.handleRequestError(error);
+          this.openErrorDialog = true;
+        });
     },
+
+    handleRequestError,
 
     filterRepeatedBuyers(buyers: any[]): Buyer[] {
       let addedBuyers: string[] = [];
@@ -246,10 +280,12 @@ export default Vue.extend({
 }
 
 .datepicker {
-  position: absolute !important;
-  top: 370px !important;
-  left: 106px !important;
-  z-index: 2 !important;
+  margin: auto;
+  width: fit-content !important;
+}
+
+.datepicker-dialog {
+  box-shadow: none !important;
 }
 
 .dateText {

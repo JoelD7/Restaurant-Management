@@ -92,6 +92,8 @@
         </div>
       </div>
     </div>
+
+    <ErrorDialog :open="openErrorDialog" :message="errorMessage" />
   </div>
 </template>
 
@@ -102,17 +104,22 @@ import TrasactionCard from "../components/TransactionCard.vue";
 import ProductCard from "../components/ProductCard.vue";
 import { transaction, dateFormat } from "../functions/functions";
 import { Buyer, Product, Transaction } from "../types";
+import Axios, { AxiosError } from "axios";
+import { handleRequestError } from "../functions/functions";
 import { Endpoints } from "../constants/constants";
+import ErrorDialog from "../components/ErrorDialog.vue";
 
 export default Vue.extend({
   name: "BuyerDetail",
-  components: { TrasactionCard, ProductCard },
+  components: { TrasactionCard, ProductCard, ErrorDialog },
   data() {
     return {
       Endpoints,
       openTransactionDialog: false,
       loadingBuyerData: true,
       transaction,
+      errorMessage: "",
+      openErrorDialog: false,
       dateFormat,
       buyerName: "",
       Colors,
@@ -168,26 +175,33 @@ export default Vue.extend({
     },
   },
 
-  async mounted() {
+  mounted() {
     this.fetchBuyer();
   },
 
   methods: {
-    async fetchBuyer() {
+    handleRequestError,
+    fetchBuyer() {
       window.scrollTo(0, 0);
 
       this.loadingBuyerData = true;
 
-      const res = await fetch(
-        `${this.Endpoints.BUYER}/${this.$route.params.id}`
-      );
-
-      res.json().then((r) => {
-        this.transactions = this.parseTransactions(r.TransactionHistory);
-        this.buyersWithEqIp = this.filterBuyers(r.BuyersWithSameIp);
-        this.recommendedProducts = r.RecommendedProducts;
-        this.loadingBuyerData = false;
-      });
+      Axios.get(`${this.Endpoints.BUYER}/${this.$route.params.id}`, {
+        withCredentials: true,
+      })
+        .then((res) => {
+          this.transactions = this.parseTransactions(
+            res.data.TransactionHistory
+          );
+          this.buyersWithEqIp = this.filterBuyers(res.data.BuyersWithSameIp);
+          this.recommendedProducts = res.data.RecommendedProducts;
+          this.loadingBuyerData = false;
+        })
+        .catch((error: AxiosError) => {
+          this.loadingBuyerData = false;
+          this.errorMessage = this.handleRequestError(error);
+          this.openErrorDialog = true;
+        });
     },
 
     /**

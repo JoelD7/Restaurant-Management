@@ -1,4 +1,5 @@
 import { Transaction } from "@/types";
+import { AxiosError } from "axios";
 
 export const currencyFormatter = Intl.NumberFormat("en-US", {
   style: "currency",
@@ -29,3 +30,16 @@ export const transaction: Transaction = {
   Date: "2020-08-17T00:00:00Z",
   Products: ["cd3de2cc", "4bb66fdd"],
 };
+
+export function handleRequestError(error: AxiosError): string {
+  if (error.response) {
+    return error.response.data;
+  } else if (error.request) {
+    return (
+      "La solicitud realizada al servidor no fue contestada. Al parecer " +
+      "el servidor no se encuentra disponible. Por favor intente más tarde. "
+    );
+  } else {
+    return error.message;
+  }
+}

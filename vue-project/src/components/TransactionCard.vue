@@ -82,6 +82,8 @@
         </p>
       </v-row>
     </v-container>
+
+    <ErrorDialog :open="openErrorDialog" :message="errorMessage" />
   </v-sheet>
 </template>
 
@@ -100,6 +102,9 @@ import {
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { currencyFormatter } from "../functions/functions";
 import { Endpoints } from "../constants/constants";
+import Axios, { AxiosError } from "axios";
+import { handleRequestError } from "../functions/functions";
+import ErrorDialog from "../components/ErrorDialog.vue";
 
 library.add(
   faDesktop,
@@ -112,12 +117,15 @@ Vue.component("font-awesome-icon", FontAwesomeIcon);
 
 export default Vue.extend({
   name: "TrasactionCard",
+  components: { ErrorDialog },
   data() {
     return {
       Endpoints,
       Colors,
       currencyFormatter,
       showProducts: false,
+      errorMessage: "",
+      openErrorDialog: false,
       loadingProducts: false,
       products: [] as Product[],
     };
@@ -131,20 +139,21 @@ export default Vue.extend({
     this.loadingProducts = true;
     let productIds = this.transaction.Products.join(",");
 
-    const res = await fetch(
-      `${this.Endpoints.PRODUCTS}?products=${productIds}`,
-      {
-        credentials: "include",
-      }
-    );
-
-    res.json().then((r) => {
-      this.loadingProducts = false;
-      this.products = r.products;
-    });
+    Axios.get(`${this.Endpoints.PRODUCTS}?products=${productIds}`, {
+      withCredentials: true,
+    })
+      .then((res) => {
+        this.loadingProducts = false;
+        this.products = res.data.products;
+      })
+      .catch((error: AxiosError) => {
+        this.errorMessage = this.handleRequestError(error);
+        this.openErrorDialog = true;
+      });
   },
 
   methods: {
+    handleRequestError,
     getTransactionTotalCost() {
       return this.products
         .map((p) => p.Price)
