@@ -147,8 +147,12 @@ func (dataLoader *DataLoader) loadProducts() error {
 }
 
 func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Product, error) {
+	addedProductIds, pErr := dataLoader.getPersistedProductsIds()
+	if pErr != nil {
+		return nil, pErr
+	}
+
 	var products []Product
-	var addedProductIds []string
 
 	for _, line := range rawProductsLines {
 		lineSections := strings.Split(line, "'")
@@ -201,6 +205,33 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 	}
 
 	return products, nil
+}
+
+func (dataLoader *DataLoader) getPersistedProductsIds() ([]string, error) {
+	var addedProductIds []string
+
+	query := `{
+		products(func: type(Product)){
+			  expand(_all_){}
+		}
+	  }`
+
+	res, qErr := dataLoader.txn.Query(ctx, query)
+	if qErr != nil {
+		return nil, fmt.Errorf("error while retrieving products from database | %w", qErr)
+	}
+
+	var productHolder ProductHolder
+	uErr := json.Unmarshal(res.Json, &productHolder)
+	if uErr != nil {
+		return nil, fmt.Errorf("error while unmarshalling products retrieved from database | %w", uErr)
+	}
+
+	for _, product := range productHolder.Products {
+		addedProductIds = append(addedProductIds, product.ProductId)
+	}
+
+	return addedProductIds, nil
 }
 
 func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {

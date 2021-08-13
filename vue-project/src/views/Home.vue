@@ -3,7 +3,7 @@
     <!-- Navbar -->
     <div class="navbar">
       <v-btn text href="/" class="navbar-btn">Inicio</v-btn>
-      <v-btn text @click="goToBuyers" class="navbar-btn">Compradores</v-btn>
+      <v-btn text @click="seeBuyers" class="navbar-btn">Compradores</v-btn>
     </div>
 
     <v-container class="top-container">
@@ -75,7 +75,7 @@
           <v-row no-gutters style="margin-top: 30px">
             <v-btn
               elevation="2"
-              @click="goToBuyers"
+              @click="seeBuyers"
               :disabled="loadingBuyers"
               :style="{ color: Colors.BLUE_TEXT }"
               class="buyers-btn"
@@ -182,6 +182,10 @@ export default Vue.extend({
 
   components: { ErrorDialog },
 
+  mounted() {
+    this.fetchBuyers();
+  },
+
   created() {
     let d = new Date(Date.now());
     let month: number = d.getMonth() + 1;
@@ -206,8 +210,11 @@ export default Vue.extend({
       this.$router.push({ path: `/buyer/${item.BuyerId}` });
     },
 
-    goToBuyers() {
-      this.fetchBuyers();
+    seeBuyers() {
+      if (this.buyers.length === 0) {
+        this.fetchBuyers();
+      }
+      window.scrollTo(0, document.body.scrollHeight);
     },
 
     loadData() {
@@ -220,8 +227,13 @@ export default Vue.extend({
         },
         { withCredentials: true }
       )
-        .then(() => {
-          this.fetchBuyers();
+        .then((r) => {
+          //No need to fetch buyers if the date has previosly been used to sync.
+          if (!r.data.includes("The restaurant data for date")) {
+            this.fetchBuyers();
+          } else {
+            this.loadingBuyers = false;
+          }
         })
         .catch((error: AxiosError) => {
           console.log(error.request);
@@ -244,8 +256,6 @@ export default Vue.extend({
           } else {
             this.dataAvailable = true;
           }
-
-          window.scrollTo(0, document.body.scrollHeight);
         })
         .catch((error: AxiosError) => {
           this.error = this.handleRequestError(error);

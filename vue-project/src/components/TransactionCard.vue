@@ -13,6 +13,7 @@
         <v-row align="center" no-gutters>
           <!-- Left col -->
           <v-col class="details-col" style="margin-bottom: auto">
+            <!-- Device -->
             <v-row align="start" no-gutters>
               <font-awesome-icon
                 size="sm"
@@ -24,6 +25,7 @@
               <p class="device">{{ transaction.Device }}</p>
             </v-row>
 
+            <!-- IP -->
             <v-row align="center" no-gutters>
               <font-awesome-icon
                 size="sm"
@@ -33,6 +35,20 @@
               />
 
               <p class="device">{{ transaction.Ip }}</p>
+            </v-row>
+
+            <!-- Date -->
+            <v-row align="center" no-gutters>
+              <font-awesome-icon
+                size="sm"
+                style="margin: 0px 10px 0px 2px"
+                :color="Colors.GREEN"
+                :icon="['far', 'calendar-alt']"
+              />
+
+              <p class="device">
+                {{ transaction["Date"] }}
+              </p>
             </v-row>
           </v-col>
         </v-row>
@@ -102,6 +118,7 @@ import {
   faDollarSign,
 } from "@fortawesome/free-solid-svg-icons";
 import { library } from "@fortawesome/fontawesome-svg-core";
+import { faCalendarAlt } from "@fortawesome/free-regular-svg-icons";
 import { currencyFormatter } from "../functions/functions";
 import { Endpoints } from "../constants/constants";
 import Axios, { AxiosError } from "axios";
@@ -113,7 +130,8 @@ library.add(
   faChevronUp,
   faChevronDown,
   faMapMarkerAlt,
-  faDollarSign
+  faDollarSign,
+  faCalendarAlt
 );
 Vue.component("font-awesome-icon", FontAwesomeIcon);
 
