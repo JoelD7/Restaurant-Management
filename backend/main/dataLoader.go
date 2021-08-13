@@ -150,16 +150,39 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 	var products []Product
 
 	for _, line := range rawProductsLines {
-		if len(strings.Split(line, "'")) < 3 {
+		lineSections := strings.Split(line, "'")
+
+		if len(lineSections) < 3 {
 			continue
 		}
 
-		id := strings.Split(line, "'")[0]
-		name := strings.Split(line, "'")[1]
-		price, err := d.NewFromString(strings.Split(line, "'")[2])
-		if err != nil {
-			fmt.Printf("parseProducts: Error while casting products prices from string to decimal.Decimal | %v\n", err)
-			return nil, err
+		var id, name string
+		var price d.Decimal
+		var priceErr error
+
+		/*
+			In this case the splitting have to rules change because if
+			they don't, a string such as:
+			<6621fd74'"Campbell's soup chicken & sausage"'3625> would
+			have <s soup chicken & sausage> as its third element after the
+			split, leading to an error, because the code expects the third
+			element to be the price of the product.
+		*/
+		if strings.Contains(line, `"`) {
+			id = lineSections[0]
+			firstQuotePos := strings.Index(line, `"`)
+			lastQuotePos := strings.LastIndex(line, `"`)
+			name = line[firstQuotePos+1 : lastQuotePos]
+			price, priceErr = d.NewFromString(lineSections[len(lineSections)-1])
+		} else {
+			id = lineSections[0]
+			name = lineSections[1]
+			price, priceErr = d.NewFromString(lineSections[2])
+		}
+
+		if priceErr != nil {
+			fmt.Printf("parseProducts: Error while casting products prices from string to decimal.Decimal | %v\n", priceErr)
+			return nil, priceErr
 		}
 
 		newProduct := Product{

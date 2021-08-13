@@ -103,15 +103,23 @@
     <div class="page-container">
       <h1 :style="{ color: Colors.BLUE }">Compradores</h1>
 
+      <p v-if="!dataAvailable" class="no-data-text">
+        La base de datos no cuenta con información para satisfacer esta
+        solicitud. Seleccione una fecha y luego presione el botón de
+        <b :style="{ color: Colors.GREEN }">Sincronizar</b> para mostrar la
+        lista de compradores.
+      </p>
+
       <v-data-table
         @click:row="onTableRowClicked"
+        v-if="dataAvailable"
         :headers="headers"
         :items="buyers"
         :items-per-page="10"
         class="buyers-table"
       ></v-data-table>
 
-      <ErrorDialog :open="openErrorDialog" :message="errorMessage" />
+      <ErrorDialog :open="openErrorDialog" :error="error" />
     </div>
   </div>
 </template>
@@ -138,9 +146,13 @@ export default Vue.extend({
   data() {
     return {
       Endpoints,
-      errorMessage: "",
+      error: {
+        message: "",
+        status: "",
+      },
       Colors,
       showDatePicker: false,
+      dataAvailable: true,
       maxDate: "",
       openErrorDialog: false,
       openTransactionDialog: false,
@@ -201,14 +213,19 @@ export default Vue.extend({
     loadData() {
       this.loadingBuyers = true;
 
-      Axios.post(this.Endpoints.RESTAURANT_DATA, {
-        date: this.date,
-      })
+      Axios.post(
+        this.Endpoints.RESTAURANT_DATA,
+        {
+          date: this.date,
+        },
+        { withCredentials: true }
+      )
         .then(() => {
           this.fetchBuyers();
         })
         .catch((error: AxiosError) => {
-          this.errorMessage = this.handleRequestError(error);
+          console.log(error.request);
+          this.error = this.handleRequestError(error);
           this.openErrorDialog = true;
           this.loadingBuyers = false;
         });
@@ -221,10 +238,17 @@ export default Vue.extend({
         .then((res) => {
           this.loadingBuyers = false;
           this.buyers = this.filterRepeatedBuyers(res.data.buyers);
+
+          if (this.buyers.length === 0) {
+            this.dataAvailable = false;
+          } else {
+            this.dataAvailable = true;
+          }
+
           window.scrollTo(0, document.body.scrollHeight);
         })
         .catch((error: AxiosError) => {
-          this.errorMessage = this.handleRequestError(error);
+          this.error = this.handleRequestError(error);
           this.openErrorDialog = true;
         });
     },
@@ -314,6 +338,28 @@ export default Vue.extend({
   color: white !important;
   margin: 0px 5px !important;
   text-transform: capitalize !important;
+}
+
+.no-data-text {
+  width: 50%;
+}
+
+@media (max-width: 1250px) {
+  .no-data-text {
+    width: 65%;
+  }
+}
+
+@media (max-width: 780px) {
+  .no-data-text {
+    width: 85%;
+  }
+}
+
+@media (max-width: 650px) {
+  .no-data-text {
+    width: 100%;
+  }
 }
 
 .page-container {

@@ -15,10 +15,14 @@
         Ha ocurrido un error. Refresque la página e inténtelo nuevamente.
       </v-card-subtitle>
 
-      <v-divider></v-divider>
+      <v-divider style="margin-bottom: 10px"></v-divider>
 
-      <v-card-text style="color: black; margin-top: 10px">
-        {{ message }}
+      <v-card-text v-if="error.status !== ''" style="color: black">
+        <b>{{ error.status }}</b>
+      </v-card-text>
+
+      <v-card-text style="color: black">
+        {{ error.message }}
       </v-card-text>
 
       <v-card-actions>
@@ -34,6 +38,7 @@ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 import { Colors } from "../assets/colors";
+import { CustomError } from "../types/types";
 
 library.add(faExclamationTriangle);
 
@@ -43,7 +48,7 @@ export default Vue.extend({
   name: "ErrorDialog",
   props: {
     open: Object as () => boolean,
-    message: Object as () => string,
+    error: Object as () => CustomError,
   },
   data() {
     return {

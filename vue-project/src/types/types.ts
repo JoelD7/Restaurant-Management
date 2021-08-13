@@ -20,3 +20,8 @@ export interface Buyer {
   Date: string;
   Age: number;
 }
+
+export interface CustomError {
+  message: string;
+  status: string;
+}

@@ -21,17 +21,17 @@ type Transaction {
   Products
 }
 
-Name: string @index(exact) .
+Name: string @index(term) .
 Date: datetime @index(year) .
 Age: int .
-ProductId: string @index(exact) .
+ProductId: string @index(term) .
 
 
 Price: float .
-TransactionId: string @index(exact) .
+TransactionId: string @index(term) .
 Date: datetime @index(year) .
-BuyerId: string @index(exact) .
-Ip: string @index(exact) .
+BuyerId: string @index(term) .
+Ip: string @index(term) .
 Device: string .
 Products: [string] .
 

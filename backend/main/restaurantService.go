@@ -48,7 +48,18 @@ func RestaurantCtx(next http.Handler) http.Handler {
 		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		writter.Header().Set("Access-Control-Allow-Credentials", "true")
 		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-		writter.Header().Set("Access-Control-Allow-Headers", "*")
+		writter.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		// header := writter.Header()
+		// header.Add("Access-Control-Allow-Origin", "http://localhost:3000")
+		// header.Add("Access-Control-Allow-Credentials", "true")
+		// header.Add("Access-Control-Allow-Methods", "DELETE, POST, GET, OPTIONS")
+		// header.Add("Access-Control-Allow-Headers", "Content-Type")
+
+		if request.Method == "OPTIONS" {
+			writter.WriteHeader(http.StatusOK)
+			return
+		}
 
 		body, bodyReadErr := io.ReadAll(request.Body)
 

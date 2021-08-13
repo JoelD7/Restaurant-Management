@@ -93,7 +93,7 @@
       </div>
     </div>
 
-    <ErrorDialog :open="openErrorDialog" :message="errorMessage" />
+    <ErrorDialog :open="openErrorDialog" :message="error" />
   </div>
 </template>
 
@@ -118,7 +118,10 @@ export default Vue.extend({
       openTransactionDialog: false,
       loadingBuyerData: true,
       transaction,
-      errorMessage: "",
+      error: {
+        message: "",
+        status: "",
+      },
       openErrorDialog: false,
       dateFormat,
       buyerName: "",
@@ -199,7 +202,7 @@ export default Vue.extend({
         })
         .catch((error: AxiosError) => {
           this.loadingBuyerData = false;
-          this.errorMessage = this.handleRequestError(error);
+          this.error = this.handleRequestError(error);
           this.openErrorDialog = true;
         });
     },

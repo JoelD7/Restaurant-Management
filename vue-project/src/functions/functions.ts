@@ -1,4 +1,4 @@
-import { Transaction } from "@/types";
+import { Transaction, CustomError } from "@/types";
 import { AxiosError } from "axios";
 
 export const currencyFormatter = Intl.NumberFormat("en-US", {
@@ -31,15 +31,23 @@ export const transaction: Transaction = {
   Products: ["cd3de2cc", "4bb66fdd"],
 };
 
-export function handleRequestError(error: AxiosError): string {
+export function handleRequestError(error: AxiosError): CustomError {
   if (error.response) {
-    return error.response.data;
+    return {
+      message: error.response.data,
+      status: String(error.response.status),
+    };
   } else if (error.request) {
-    return (
-      "La solicitud realizada al servidor no fue contestada. Al parecer " +
-      "el servidor no se encuentra disponible. Por favor intente más tarde. "
-    );
+    return {
+      message:
+        "La solicitud realizada al servidor no fue contestada. Al parecer " +
+        "el servidor no se encuentra disponible. Por favor intente más tarde. ",
+      status: error.code ? error.code : "",
+    };
   } else {
-    return error.message;
+    return {
+      message: error.message,
+      status: error.code ? error.code : "",
+    };
   }
 }

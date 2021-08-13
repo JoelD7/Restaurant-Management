@@ -83,7 +83,7 @@
       </v-row>
     </v-container>
 
-    <ErrorDialog :open="openErrorDialog" :message="errorMessage" />
+    <ErrorDialog :open="openErrorDialog" :message="error" />
   </v-sheet>
 </template>
 
@@ -124,7 +124,10 @@ export default Vue.extend({
       Colors,
       currencyFormatter,
       showProducts: false,
-      errorMessage: "",
+      error: {
+        message: "",
+        status: "",
+      },
       openErrorDialog: false,
       loadingProducts: false,
       products: [] as Product[],
@@ -147,7 +150,7 @@ export default Vue.extend({
         this.products = res.data.products;
       })
       .catch((error: AxiosError) => {
-        this.errorMessage = this.handleRequestError(error);
+        this.error = this.handleRequestError(error);
         this.openErrorDialog = true;
       });
   },
