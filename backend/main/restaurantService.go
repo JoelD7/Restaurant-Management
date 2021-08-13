@@ -50,12 +50,6 @@ func RestaurantCtx(next http.Handler) http.Handler {
 		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 		writter.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-		// header := writter.Header()
-		// header.Add("Access-Control-Allow-Origin", "http://localhost:3000")
-		// header.Add("Access-Control-Allow-Credentials", "true")
-		// header.Add("Access-Control-Allow-Methods", "DELETE, POST, GET, OPTIONS")
-		// header.Add("Access-Control-Allow-Headers", "Content-Type")
-
 		if request.Method == "OPTIONS" {
 			writter.WriteHeader(http.StatusOK)
 			return
@@ -122,6 +116,7 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 
 	if err != nil {
 		http.Error(writter, err.Error(), http.StatusNotFound)
+		return
 	}
 
 	writter.Write(res.Json)
@@ -158,6 +153,7 @@ func getProducts(writter http.ResponseWriter, request *http.Request) {
 	res, err := txn.Query(ctx, query)
 	if err != nil {
 		http.Error(writter, err.Error(), http.StatusNotFound)
+		return
 	}
 
 	writter.Write(res.Json)
@@ -184,6 +180,7 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	if transErr != nil {
 		err := fmt.Errorf("error while fetching buyer | %w", transErr)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		return
 	}
 
 	var buyerIps []string
@@ -196,6 +193,7 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	if transForIpErr != nil {
 		err := fmt.Errorf("error while fetching buyer | %w", transForIpErr)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		return
 	}
 
 	var buyerIds []string
@@ -208,12 +206,14 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	if buyerErr != nil {
 		err := fmt.Errorf("error while fetching buyer | %w", buyerErr)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		return
 	}
 
 	recommendedProducts, productErr := getProductRecommendations(buyerTransactions)
 	if productErr != nil {
 		err := fmt.Errorf("error while fetching buyer | %w", productErr)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		return
 	}
 
 	dataToReturn := &BuyerIdEndpoint{
@@ -227,6 +227,7 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	if mErr != nil {
 		err := fmt.Errorf("error while marshalling dataToReturn: %v", mErr)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		return
 	}
 
 	writter.Write(dataToReturnAsJson)

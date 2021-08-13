@@ -37,6 +37,7 @@
 
         <v-dialog
           width="700"
+          content-class="transaction-dialog"
           @click:outside="closeDialog"
           v-model="openTransactionDialog"
         >
@@ -65,7 +66,7 @@
           @click:row="onBuyerClicked"
           :headers="buyerHeaders"
           :items="buyersWithEqIp"
-          :items-per-page="5"
+          :items-per-page="10"
           class="buyers-table"
         ></v-data-table>
       </div>
@@ -93,7 +94,7 @@
       </div>
     </div>
 
-    <ErrorDialog :open="openErrorDialog" :message="error" />
+    <ErrorDialog :open="openErrorDialog" :error="error" />
   </div>
 </template>
 
@@ -316,6 +317,10 @@ export default Vue.extend({
   justify-content: center;
   margin-top: 20px;
   width: 30%;
+}
+
+.transaction-dialog {
+  box-shadow: none;
 }
 
 .transaction-table-header {

@@ -148,6 +148,7 @@ func (dataLoader *DataLoader) loadProducts() error {
 
 func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Product, error) {
 	var products []Product
+	var addedProductIds []string
 
 	for _, line := range rawProductsLines {
 		lineSections := strings.Split(line, "'")
@@ -193,7 +194,10 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 			Type:      c.ProductType,
 		}
 
-		products = append(products, newProduct)
+		if !f.ArrayContains(addedProductIds, id) {
+			products = append(products, newProduct)
+			addedProductIds = append(addedProductIds, id)
+		}
 	}
 
 	return products, nil

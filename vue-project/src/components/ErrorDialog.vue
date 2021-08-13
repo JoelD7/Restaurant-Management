@@ -38,7 +38,6 @@ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 import { Colors } from "../assets/colors";
-import { CustomError } from "../types/types";
 
 library.add(faExclamationTriangle);
 
@@ -47,8 +46,8 @@ Vue.component("font-awesome-icon", FontAwesomeIcon);
 export default Vue.extend({
   name: "ErrorDialog",
   props: {
-    open: Object as () => boolean,
-    error: Object as () => CustomError,
+    open: Boolean,
+    error: Object,
   },
   data() {
     return {
