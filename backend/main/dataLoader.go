@@ -177,11 +177,11 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 			id = lineSections[0]
 			firstQuotePos := strings.Index(line, `"`)
 			lastQuotePos := strings.LastIndex(line, `"`)
-			name = line[firstQuotePos+1 : lastQuotePos]
+			name = strings.ReplaceAll(line[firstQuotePos+1:lastQuotePos], "&quot;", "'")
 			price, priceErr = d.NewFromString(lineSections[len(lineSections)-1])
 		} else {
 			id = lineSections[0]
-			name = lineSections[1]
+			name = strings.ReplaceAll(lineSections[1], "&quot;", "'")
 			price, priceErr = d.NewFromString(lineSections[2])
 		}
 
@@ -198,7 +198,7 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 			Type:      c.ProductType,
 		}
 
-		if !f.ArrayContains(addedProductIds, id) {
+		if !f.ArrayContains(addedProductIds, id) && name != "" && name != "null" {
 			products = append(products, newProduct)
 			addedProductIds = append(addedProductIds, id)
 		}

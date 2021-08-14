@@ -4,13 +4,13 @@
     class="card"
     :style="{ 'background-color': Colors.GREEN }"
   >
-    <h3 style="color: white; font-weight: normal">{{ product.Name }}</h3>
+    <h4 style="color: white; font-weight: normal">{{ product.Name }}</h4>
 
     <v-divider class="divider"></v-divider>
 
-    <h3 class="price">
+    <h4 class="price">
       {{ currencyFormatter(product.Price) }}
-    </h3>
+    </h4>
   </v-sheet>
 </template>
 
