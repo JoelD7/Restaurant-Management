@@ -263,34 +263,17 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {
 func (dataLoader *DataLoader) loadBuyers() error {
 	fmt.Println("Loading buyers...")
 
-	waitGroup := sync.WaitGroup{}
-	var unfilteredBuyers []BuyerUnmarshall
-	var uErr error
-
-	waitGroup.Add(1)
-	go func() error {
-		unfilteredBuyers, uErr = dataLoader.fetchBuyersFromAWS()
-		if uErr != nil {
-			return uErr
-		}
-
-		waitGroup.Done()
-		return fmt.Errorf("error in goroutine")
-	}()
+	unfilteredBuyers, uErr := dataLoader.fetchBuyersFromAWS()
+	if uErr != nil {
+		return uErr
+	}
 
 	var buyers []BuyerUnmarshall
-	var addedBuyerIds []string
-	var bErr error
 
-	waitGroup.Add(1)
-	go func() error {
-		addedBuyerIds, bErr = dataLoader.getPersistedBuyersIds()
-		if bErr != nil {
-			return bErr
-		}
-
-		return nil
-	}()
+	addedBuyerIds, bErr := dataLoader.getPersistedBuyersIds()
+	if bErr != nil {
+		return bErr
+	}
 
 	for _, b := range unfilteredBuyers {
 		if !f.ArrayContains(addedBuyerIds, b.BuyerId) {
