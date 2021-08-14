@@ -38,6 +38,10 @@ type BuyerUnmarshall struct {
 	Type    string `json:"dgraph.type,omitempty"`
 }
 
+type BuyerHolder struct {
+	Buyers []Buyer
+}
+
 type Product struct {
 	ProductId string
 	Name      string
@@ -259,37 +263,22 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {
 func (dataLoader *DataLoader) loadBuyers() error {
 	fmt.Println("Loading buyers...")
 
-	req, reqErr := http.NewRequest("GET", c.BuyersURL, nil)
-	if reqErr != nil {
-		fmt.Printf("Error in GET request '%s' | %v\n", c.BuyersURL, reqErr)
-		return reqErr
-	}
-
-	q := req.URL.Query()
-	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
-	q.Add("date", dateAsTimestamp)
-
-	req.URL.RawQuery = q.Encode()
-	requestUrl := req.URL.String()
-
-	resp, resErr := http.Get(requestUrl)
-	if resErr != nil {
-		fmt.Printf("Error in response for GET request '%s' | %v\n", requestUrl, resErr)
-		return resErr
-	}
-
-	defer resp.Body.Close()
-	body, bodyReadErr := io.ReadAll(resp.Body)
-	if bodyReadErr != nil {
-		fmt.Printf("Error reading body of response for GET request '%s' | %v\n", requestUrl, bodyReadErr)
-		return bodyReadErr
+	unfilteredBuyers, uErr := dataLoader.fetchBuyersFromAWS()
+	if uErr != nil {
+		return uErr
 	}
 
 	var buyers []BuyerUnmarshall
-	uErr := json.Unmarshal(body, &buyers)
-	if uErr != nil {
-		fmt.Printf("Error while unmarshalling buyers object obtained from response for GET request '%s'\n| %v", requestUrl, uErr)
-		return uErr
+	addedBuyerIds, bErr := dataLoader.getPersistedBuyersIds()
+	if bErr != nil {
+		return bErr
+	}
+
+	for _, b := range unfilteredBuyers {
+		if !f.ArrayContains(addedBuyerIds, b.BuyerId) {
+			buyers = append(buyers, b)
+			addedBuyerIds = append(addedBuyerIds, b.BuyerId)
+		}
 	}
 
 	jsonBuyers, mErr := dataLoader.marshalJSON(&buyers)
@@ -304,6 +293,72 @@ func (dataLoader *DataLoader) loadBuyers() error {
 	}
 
 	return nil
+}
+
+func (dataLoader *DataLoader) fetchBuyersFromAWS() ([]BuyerUnmarshall, error) {
+	//Form request URL
+	req, reqErr := http.NewRequest("GET", c.BuyersURL, nil)
+	if reqErr != nil {
+		fmt.Printf("Error while forming GET request '%s' | %v\n", c.BuyersURL, reqErr)
+		return nil, reqErr
+	}
+
+	q := req.URL.Query()
+	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
+	q.Add("date", dateAsTimestamp)
+
+	req.URL.RawQuery = q.Encode()
+	requestUrl := req.URL.String()
+
+	// Make GET request
+	resp, resErr := http.Get(requestUrl)
+	if resErr != nil {
+		fmt.Printf("Error in response for GET request '%s' | %v\n", requestUrl, resErr)
+		return nil, resErr
+	}
+
+	// Read response body
+	defer resp.Body.Close()
+	body, bodyReadErr := io.ReadAll(resp.Body)
+	if bodyReadErr != nil {
+		fmt.Printf("Error reading body of response for GET request '%s' | %v\n", requestUrl, bodyReadErr)
+		return nil, bodyReadErr
+	}
+
+	var unfilteredBuyers []BuyerUnmarshall
+	uErr := json.Unmarshal(body, &unfilteredBuyers)
+	if uErr != nil {
+		fmt.Printf("Error while unmarshalling buyers object obtained from response for GET request '%s'\n| %v", requestUrl, uErr)
+		return nil, uErr
+	}
+
+	return unfilteredBuyers, nil
+}
+
+func (dataLoader *DataLoader) getPersistedBuyersIds() ([]string, error) {
+	var addedIds []string
+	query := `{
+		buyers(func: type(Buyer)){
+			  expand(_all_){}
+		}
+	  }`
+
+	res, err := dataLoader.txn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("error while fetching buyers from database %w", err)
+	}
+
+	var buyerHolder BuyerHolder
+	uErr := json.Unmarshal(res.Json, &buyerHolder)
+	if uErr != nil {
+		return nil, fmt.Errorf("error while unmarshalling buyers retrieved from database | %w", uErr)
+	}
+
+	for _, buyer := range buyerHolder.Buyers {
+		addedIds = append(addedIds, buyer.BuyerId)
+	}
+
+	return addedIds, nil
 }
 
 /*

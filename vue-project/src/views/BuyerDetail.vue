@@ -319,6 +319,10 @@ export default Vue.extend({
   width: 30%;
 }
 
+table tr {
+  cursor: pointer;
+}
+
 .transaction-dialog {
   box-shadow: none;
 }
