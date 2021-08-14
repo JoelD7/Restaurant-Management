@@ -249,8 +249,6 @@ export default Vue.extend({
         .then((res) => {
           this.loadingBuyers = false;
           this.buyers = res.data.buyers;
-          // this.buyers = this.filterRepeatedBuyers(res.data.buyers);
-          this.test(this.buyers);
 
           if (this.buyers.length === 0) {
             this.dataAvailable = false;
@@ -265,32 +263,6 @@ export default Vue.extend({
     },
 
     handleRequestError,
-
-    test(buyers: any[]) {
-      let added: string[] = [];
-      buyers.forEach((buyer) => {
-        if (added.includes(buyer.Name)) {
-          console.log(buyer.Name);
-          return;
-        } else {
-          added.push(buyer.Name);
-        }
-      });
-    },
-
-    filterRepeatedBuyers(buyers: any[]): Buyer[] {
-      let addedBuyers: string[] = [];
-      let buyersBuffer: Buyer[] = [];
-
-      buyers.forEach((b: any) => {
-        if (!addedBuyers.includes(b.BuyerId)) {
-          addedBuyers.push(b.BuyerId);
-          buyersBuffer.push(b);
-        }
-      });
-
-      return buyersBuffer;
-    },
   },
 });
 </script>
