@@ -102,33 +102,11 @@ func (dataLoader *DataLoader) loadRestaurantData() (string, error) {
 func (dataLoader *DataLoader) loadProducts() error {
 	fmt.Println("Loading products...")
 
-	req, reqErr := http.NewRequest("GET", c.ProductURL, nil)
-	if reqErr != nil {
-		fmt.Println(reqErr)
-		return reqErr
+	rawProductsLines, pErr := dataLoader.fetchProductsFromAWS()
+	if pErr != nil {
+		return pErr
 	}
 
-	q := req.URL.Query()
-	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
-	q.Add("date", dateAsTimestamp)
-
-	req.URL.RawQuery = q.Encode()
-	requestUrl := req.URL.String()
-
-	resp, respErr := http.Get(requestUrl)
-	if respErr != nil {
-		fmt.Printf("Error in response for GET request: '%s' | %v\n", requestUrl, respErr)
-		return respErr
-	}
-
-	defer resp.Body.Close()
-	body, resBodyError := io.ReadAll(resp.Body)
-	if resBodyError != nil {
-		fmt.Printf("Error while reading response body for request '%s' | %v\n", requestUrl, resBodyError)
-		return resBodyError
-	}
-
-	rawProductsLines := strings.Split(string(body), "\n")
 	products, parseErr := dataLoader.parseProducts(rawProductsLines)
 	if parseErr != nil {
 		return fmt.Errorf("error while parsing products | %w", parseErr)
@@ -148,6 +126,37 @@ func (dataLoader *DataLoader) loadProducts() error {
 	}
 
 	return nil
+}
+
+func (dataLoader *DataLoader) fetchProductsFromAWS() ([]string, error) {
+	req, reqErr := http.NewRequest("GET", c.ProductURL, nil)
+	if reqErr != nil {
+		fmt.Println(reqErr)
+		return nil, reqErr
+	}
+
+	q := req.URL.Query()
+	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
+	q.Add("date", dateAsTimestamp)
+
+	req.URL.RawQuery = q.Encode()
+	requestUrl := req.URL.String()
+
+	resp, respErr := http.Get(requestUrl)
+	if respErr != nil {
+		fmt.Printf("Error in response for GET request: '%s' | %v\n", requestUrl, respErr)
+		return nil, respErr
+	}
+
+	defer resp.Body.Close()
+	body, resBodyError := io.ReadAll(resp.Body)
+	if resBodyError != nil {
+		fmt.Printf("Error while reading response body for request '%s' | %v\n", requestUrl, resBodyError)
+		return nil, resBodyError
+	}
+
+	rawProductsLines := strings.Split(string(body), "\n")
+	return rawProductsLines, nil
 }
 
 func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Product, error) {
@@ -401,34 +410,11 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) error {
 func (dataLoader *DataLoader) loadTransactions() error {
 	fmt.Println("Loading transactions...")
 
-	req, reqErr := http.NewRequest("GET", c.TransactionsURL, nil)
-
-	if reqErr != nil {
-		fmt.Printf("Error in GET request '%s' | %v \n", c.TransactionsURL, reqErr)
-		return reqErr
+	rawTransactions, tErr := dataLoader.fetchTransactionsFromAWS()
+	if tErr != nil {
+		return tErr
 	}
 
-	q := req.URL.Query()
-	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
-	q.Add("date", dateAsTimestamp)
-
-	req.URL.RawQuery = q.Encode()
-	query := req.URL.String()
-
-	resp, resErr := http.Get(query)
-	if resErr != nil {
-		fmt.Printf("Error in response for GET request '%s' | %v\n", query, resErr)
-		return resErr
-	}
-
-	defer resp.Body.Close()
-	body, bodyErr := io.ReadAll(resp.Body)
-	if bodyErr != nil {
-		fmt.Printf("Error while reading response body of GET request '%s' | %v\n", query, bodyErr)
-		return bodyErr
-	}
-
-	rawTransactions := strings.Split(string(body), "#")
 	var transactions []Transaction = dataLoader.parseTransactions(rawTransactions)
 	rawJsonTransactions, mErr := json.Marshal(transactions)
 
@@ -449,7 +435,38 @@ func (dataLoader *DataLoader) loadTransactions() error {
 	}
 
 	return nil
+}
 
+func (dataLoader *DataLoader) fetchTransactionsFromAWS() ([]string, error) {
+	req, reqErr := http.NewRequest("GET", c.TransactionsURL, nil)
+
+	if reqErr != nil {
+		fmt.Printf("Error in GET request '%s' | %v \n", c.TransactionsURL, reqErr)
+		return nil, reqErr
+	}
+
+	q := req.URL.Query()
+	var dateAsTimestamp string = fmt.Sprint(f.DateStringToTimestamp(dataLoader.dateStr))
+	q.Add("date", dateAsTimestamp)
+
+	req.URL.RawQuery = q.Encode()
+	query := req.URL.String()
+
+	resp, resErr := http.Get(query)
+	if resErr != nil {
+		fmt.Printf("Error in response for GET request '%s' | %v\n", query, resErr)
+		return nil, resErr
+	}
+
+	defer resp.Body.Close()
+	body, bodyErr := io.ReadAll(resp.Body)
+	if bodyErr != nil {
+		fmt.Printf("Error while reading response body of GET request '%s' | %v\n", query, bodyErr)
+		return nil, bodyErr
+	}
+
+	rawTransactions := strings.Split(string(body), "#")
+	return rawTransactions, nil
 }
 
 func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Transaction {
