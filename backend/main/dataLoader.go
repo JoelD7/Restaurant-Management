@@ -8,7 +8,6 @@ import (
 	c "module/constants"
 	f "module/utils"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -408,8 +407,6 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) error {
 }
 
 func (dataLoader *DataLoader) loadTransactions() error {
-	fmt.Println("Loading transactions...")
-
 	rawTransactions, tErr := dataLoader.fetchTransactionsFromAWS()
 	if tErr != nil {
 		return tErr
@@ -427,7 +424,7 @@ func (dataLoader *DataLoader) loadTransactions() error {
 		Replace all appearances of the unicode null character: \u0000 with an
 		empty string.
 	*/
-	jsonTransactions := strings.Replace(string(rawJsonTransactions), "\\u0000", "", -1)
+	jsonTransactions := strings.ReplaceAll(string(rawJsonTransactions), "\\u0000", "")
 	persistErr := dataLoader.persistTransactions([]byte(jsonTransactions))
 
 	if persistErr != nil {
@@ -465,7 +462,9 @@ func (dataLoader *DataLoader) fetchTransactionsFromAWS() ([]string, error) {
 		return nil, bodyErr
 	}
 
-	rawTransactions := strings.Split(string(body), "#")
+	//Replace null characters with '||'
+	bodyWithBars := strings.ReplaceAll(string(body), "\x00", "|")
+	rawTransactions := strings.Split(bodyWithBars, "||")
 	return rawTransactions, nil
 }
 
@@ -474,29 +473,19 @@ func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Tran
 	transactionsQty := len(rawTransactions)
 
 	for i := 0; i < transactionsQty; i++ {
-		line := rawTransactions[i]
-		size := len(line)
+		transactionString := rawTransactions[i]
+		size := len(transactionString)
+		transactionStringArr := strings.Split(transactionString, "|")
 
 		if size == 0 {
 			continue
 		}
 
-		transactionId := line[0:12]
-		buyerId := line[12:21]
-		deviceRgx := regexp.MustCompile(`[a-z]`)
-		productRgx := regexp.MustCompile(`\(`)
-
-		deviceIndex := deviceRgx.FindStringIndex(line[21 : size-1])[0]
-		if deviceIndex == 0 {
-			continue
-		}
-
-		productIndex := productRgx.FindStringIndex(line[21 : size-1])[0]
-
-		ip := line[21 : deviceIndex+21]
-		device := line[deviceIndex+21 : productIndex+21]
-		products := line[productIndex+21:]
-		products = products[1 : len(products)-3]
+		transactionId := string(transactionStringArr[0])[1:]
+		buyerId := transactionStringArr[1]
+		ip := transactionStringArr[2]
+		device := transactionStringArr[3]
+		products := string(transactionStringArr[4])[1 : len(transactionStringArr[4])-1]
 
 		newTransaction := Transaction{
 			BuyerId:       buyerId,
@@ -509,7 +498,6 @@ func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Tran
 		}
 
 		transactions = append(transactions, newTransaction)
-
 	}
 
 	return transactions
@@ -528,7 +516,6 @@ func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) error
 		return err
 	}
 
-	fmt.Println("Transactions loaded.")
 	return nil
 }
 

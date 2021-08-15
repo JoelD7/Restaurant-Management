@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	c "module/constants"
 	"time"
 )
@@ -20,4 +21,9 @@ func ArrayContains(array []string, element string) bool {
 	}
 
 	return result
+}
+
+func TimeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	fmt.Printf("%s took %s\n", name, elapsed)
 }
