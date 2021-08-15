@@ -121,6 +121,17 @@
 
       <ErrorDialog :open="openErrorDialog" :error="error" />
     </div>
+
+    <v-snackbar
+      :timeout="4000"
+      :value="openSnackbar"
+      absolute
+      top
+      :color="Colors.ORANGE"
+      elevation="24"
+    >
+      Esta fecha ya ha sido sincronizada.
+    </v-snackbar>
   </div>
 </template>
 
@@ -150,6 +161,7 @@ export default Vue.extend({
         message: "",
         status: "",
       },
+      openSnackbar: false,
       Colors,
       showDatePicker: false,
       dataAvailable: true,
@@ -219,6 +231,7 @@ export default Vue.extend({
 
     loadData() {
       this.loadingBuyers = true;
+      this.openSnackbar = false;
 
       Axios.post(
         this.Endpoints.RESTAURANT_DATA,
@@ -232,6 +245,7 @@ export default Vue.extend({
           if (!r.data.includes("The restaurant data for date")) {
             this.fetchBuyers();
           } else {
+            this.openSnackbar = true;
             this.loadingBuyers = false;
           }
         })
