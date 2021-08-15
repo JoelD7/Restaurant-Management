@@ -376,7 +376,7 @@ func getSimilarProductTransactions(boughtProducts []string) ([]Transaction, erro
 	defer txn.Discard(ctx)
 
 	query := fmt.Sprintf(`{
-		transactions(func: type(Transaction)) 
+		transactions(func: type(Transaction), first: 10) 
 			@filter(anyofterms(Products, "%s")) {
 			  expand(_all_){}
 		}

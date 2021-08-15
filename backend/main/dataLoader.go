@@ -504,6 +504,7 @@ func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Tran
 }
 
 func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) error {
+	defer f.TimeTrack(time.Now(), "persistTransactions")
 	mutation := &api.Mutation{
 		SetJson:   jsonTransactions,
 		CommitNow: true,
