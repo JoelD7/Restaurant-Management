@@ -6,9 +6,13 @@ import (
 	"time"
 )
 
-func DateStringToTimestamp(str string) int64 {
-	t, _ := time.Parse(c.DateLayout, str)
-	return t.Unix()
+func DateStringToTimestamp(str string) (int64, error) {
+	t, err := time.Parse(c.DateLayout, str)
+	if err != nil {
+		return 0, fmt.Errorf("error while parsing string date '%s': %w", str, err)
+	}
+
+	return t.Unix(), nil
 }
 
 func ArrayContains(array []string, element string) bool {

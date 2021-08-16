@@ -134,10 +134,6 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 
 func ProductsCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		writter.Header().Set("Access-Control-Allow-Credentials", "true")
-		writter.Header().Set("Content-Type", "application/json")
-
 		products := request.URL.Query().Get("products")
 
 		ctx := context.WithValue(request.Context(), productsKey, products)
