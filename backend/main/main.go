@@ -38,7 +38,7 @@ func main() {
 
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
-	router.Use(CorsCtx)
+	router.Use(Cors)
 
 	router.Route("/", func(router chi.Router) {
 		router.Get("/", describeAPI)
@@ -82,8 +82,6 @@ func newDGraphClient() *dgo.Dgraph {
 }
 
 func describeAPI(writter http.ResponseWriter, request *http.Request) {
-	writter.Header().Set("Content-Type", "application/json")
-
 	var descriptor []APIDescriptor = []APIDescriptor{
 		{
 			Method:      "POST",

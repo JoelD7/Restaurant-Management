@@ -39,7 +39,7 @@ const buyerIdKey key = "buyerId"
 const dateKey key = "date"
 const productsKey key = "products"
 
-func CorsCtx(next http.Handler) http.Handler {
+func Cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
 		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		writter.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -51,7 +51,7 @@ func CorsCtx(next http.Handler) http.Handler {
 }
 
 /*
-	Extracts the url parameter from the request and adds it to
+	Extracts the request body and adds it to
 	the context so that the handlers have can use it.
 */
 func RestaurantCtx(next http.Handler) http.Handler {
@@ -70,7 +70,10 @@ func RestaurantCtx(next http.Handler) http.Handler {
 		}
 
 		var requestBody RequestBody
-		json.Unmarshal(body, &requestBody)
+		uErr := json.Unmarshal(body, &requestBody)
+		if uErr != nil {
+			http.Error(writter, uErr.Error(), http.StatusUnprocessableEntity)
+		}
 
 		ctx := context.WithValue(request.Context(), dateKey, requestBody.Date)
 		next.ServeHTTP(writter, request.WithContext(ctx))
