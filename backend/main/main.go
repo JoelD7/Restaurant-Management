@@ -28,7 +28,7 @@ type APIDescriptor struct {
 }
 
 var ctx context.Context = context.Background()
-var dgraphClient *dgo.Dgraph = newClient()
+var dgraphClient = newDGraphClient()
 
 const port string = "9000"
 
@@ -70,13 +70,14 @@ func main() {
 
 }
 
-func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+func newDGraphClient() *dgo.Dgraph {
+	target := "localhost:9080"
+	clientConn, err := grpc.Dial(target, grpc.WithInsecure())
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(fmt.Errorf("error ocurred while trying to establish connection with '%s': %w", target, err))
 	}
 
-	dc := api.NewDgraphClient(d)
+	dc := api.NewDgraphClient(clientConn)
 	return dgo.NewDgraphClient(dc)
 }
 

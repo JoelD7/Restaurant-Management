@@ -257,7 +257,7 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {
 		CommitNow: true,
 	}
 
-	_, err := newClient().NewTxn().Do(context.Background(), req)
+	_, err := dgraphClient.NewTxn().Do(context.Background(), req)
 
 	if err != nil {
 		fmt.Printf("Error while persisting new products | %v\n", err)
@@ -395,7 +395,7 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) error {
 		CommitNow: true,
 	}
 
-	_, err := newClient().NewTxn().Do(context.Background(), req)
+	_, err := dgraphClient.NewTxn().Do(context.Background(), req)
 
 	if err != nil {
 		fmt.Printf("Error while persisting buyers to database: %v", err)
