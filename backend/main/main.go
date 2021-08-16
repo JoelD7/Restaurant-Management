@@ -38,6 +38,7 @@ func main() {
 
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
+	router.Use(CorsCtx)
 
 	router.Route("/", func(router chi.Router) {
 		router.Get("/", describeAPI)
@@ -50,7 +51,6 @@ func main() {
 	})
 
 	router.Route("/buyer", func(router chi.Router) {
-		router.Use(BuyerCtx)
 		router.Get("/all", getBuyers)
 
 		router.Route("/{buyerId}", func(router chi.Router) {

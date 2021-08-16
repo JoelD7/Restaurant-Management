@@ -39,16 +39,23 @@ const buyerIdKey key = "buyerId"
 const dateKey key = "date"
 const productsKey key = "products"
 
+func CorsCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		writter.Header().Set("Access-Control-Allow-Credentials", "true")
+		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+		writter.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		next.ServeHTTP(writter, request)
+	})
+}
+
 /*
 	Extracts the url parameter from the request and adds it to
 	the context so that the handlers have can use it.
 */
 func RestaurantCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		writter.Header().Set("Access-Control-Allow-Credentials", "true")
-		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-		writter.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if request.Method == "OPTIONS" {
 			writter.WriteHeader(http.StatusOK)
@@ -161,10 +168,6 @@ func getProducts(writter http.ResponseWriter, request *http.Request) {
 
 func BuyerCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		writter.Header().Set("Access-Control-Allow-Credentials", "true")
-		writter.Header().Set("Content-Type", "application/json")
-
 		buyerId := chi.URLParam(request, "buyerId")
 
 		ctx := context.WithValue(request.Context(), buyerIdKey, buyerId)
