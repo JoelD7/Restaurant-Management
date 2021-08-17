@@ -52,11 +52,12 @@ func Cors(next http.Handler) http.Handler {
 
 /*
 	Extracts the request body and adds it to
-	the context so that the handlers have can use it.
+	the context so that the handlers can use it.
 */
 func RestaurantCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
 
+		//To solve CORS preflight invalid status error
 		if request.Method == "OPTIONS" {
 			writter.WriteHeader(http.StatusOK)
 			return

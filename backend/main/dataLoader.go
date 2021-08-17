@@ -21,7 +21,6 @@ type Buyer struct {
 	BuyerId string
 	Age     int
 	Name    string
-	Date    string `json:"Date,omitempty"`
 	Type    string `json:"dgraph.type,omitempty"`
 }
 
@@ -33,7 +32,6 @@ type BuyerUnmarshall struct {
 	BuyerId string `json:"id,omitempty"`
 	Age     int
 	Name    string
-	Date    string `json:"Date,omitempty"`
 	Type    string `json:"dgraph.type,omitempty"`
 }
 
@@ -44,7 +42,6 @@ type BuyerHolder struct {
 type Product struct {
 	ProductId string
 	Name      string
-	Date      string
 	Price     d.Decimal
 	Type      string `json:"dgraph.type,omitempty"`
 }
@@ -83,6 +80,7 @@ func (dataLoader *DataLoader) loadRestaurantData() (string, error) {
 
 	waitGroup := sync.WaitGroup{}
 	errorChan := make(chan error)
+	wgDone := make(chan bool)
 
 	for i := range functions {
 		waitGroup.Add(1)
@@ -97,15 +95,19 @@ func (dataLoader *DataLoader) loadRestaurantData() (string, error) {
 		}(functions[i])
 	}
 
-	if loadError := <-errorChan; loadError != nil {
+	go func() {
+		waitGroup.Wait()
+		close(wgDone)
+	}()
+
+	select {
+	case loadError := <-errorChan:
+		close(errorChan)
 		return "", loadError
+
+	case <-wgDone:
+		return "All data succesfully loaded", nil
 	}
-
-	close(errorChan)
-
-	waitGroup.Wait()
-
-	return "All data succesfully loaded", nil
 }
 
 func (dataLoader *DataLoader) loadProducts() error {
@@ -181,6 +183,7 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 	var products []Product
 
 	for _, line := range rawProductsLines {
+		// c89db54f'Campbell's minestrone italian style slow simmered soup'8841
 		lineSections := strings.Split(line, "'")
 
 		if len(lineSections) < 3 {
@@ -220,7 +223,6 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 			ProductId: id,
 			Name:      name,
 			Price:     price,
-			Date:      dataLoader.dateStr,
 			Type:      c.ProductType,
 		}
 
@@ -396,7 +398,6 @@ func (dataLoader *DataLoader) marshalBuyers(buyers *[]BuyerUnmarshall) ([]byte, 
 	var a []Buyer = []Buyer{}
 	for _, e := range *buyers {
 		e.Type = c.BuyerType
-		e.Date = dataLoader.dateStr
 		a = append(a, Buyer(e))
 	}
 
@@ -426,6 +427,8 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) error {
 }
 
 func (dataLoader *DataLoader) loadTransactions() error {
+	fmt.Println("Loading transactions...")
+
 	rawTransactions, tErr := dataLoader.fetchTransactionsFromAWS()
 	if tErr != nil {
 		return tErr
