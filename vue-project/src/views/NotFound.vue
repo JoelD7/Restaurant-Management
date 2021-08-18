@@ -45,9 +45,6 @@ export default Vue.extend({
     goToHome() {
       this.$router.push({ path: "/" });
     },
-    goToBuyers() {
-      this.$router.push({ path: "/" });
-    },
   },
 });
 </script>
