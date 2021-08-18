@@ -45,6 +45,7 @@ func Cors(next http.Handler) http.Handler {
 		writter.Header().Set("Access-Control-Allow-Credentials", "true")
 		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 		writter.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		writter.Header().Set("Content-Type", "application/json")
 
 		next.ServeHTTP(writter, request)
 	})
@@ -101,6 +102,7 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	writter.WriteHeader(http.StatusCreated)
 	writter.Write([]byte(res))
 
 	if !ok {
