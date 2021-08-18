@@ -61,39 +61,35 @@ type DataLoader struct {
 	txn     *dgo.Txn
 }
 
-func (dataLoader *DataLoader) loadRestaurantData() (string, error) {
+type LoadResponse struct {
+	Buyers       []Buyer
+	Products     []Product
+	Transactions []Transaction
+}
+
+func (dataLoader *DataLoader) loadRestaurantData() ([]byte, error) {
 	ok, dateErr := dataLoader.isDateRequestable()
 	if dateErr != nil {
 		fmt.Println(dateErr)
-		return "", dateErr
+		return nil, dateErr
 	}
 
 	if !ok {
 		fmt.Printf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
-		return fmt.Sprintf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr), nil
+		return nil, nil
 	}
-
-	functions := make([]func() error, 0)
-	functions = append(functions, dataLoader.loadBuyers)
-	functions = append(functions, dataLoader.loadTransactions)
-	functions = append(functions, dataLoader.loadProducts)
 
 	waitGroup := sync.WaitGroup{}
 	errorChan := make(chan error)
 	wgDone := make(chan bool)
+	productsChan := make(chan []Product, 1)
+	transactionsChan := make(chan []Transaction, 1)
+	buyersChan := make(chan []Buyer, 1)
 
-	for i := range functions {
-		waitGroup.Add(1)
-
-		go func(function func() error) {
-			err := function()
-			if err != nil {
-				errorChan <- err
-			}
-
-			waitGroup.Done()
-		}(functions[i])
-	}
+	waitGroup.Add(3)
+	go dataLoader.loadProducts(errorChan, productsChan, &waitGroup)
+	go dataLoader.loadBuyers(errorChan, buyersChan, &waitGroup)
+	go dataLoader.loadTransactions(errorChan, transactionsChan, &waitGroup)
 
 	go func() {
 		waitGroup.Wait()
@@ -103,39 +99,52 @@ func (dataLoader *DataLoader) loadRestaurantData() (string, error) {
 	select {
 	case loadError := <-errorChan:
 		close(errorChan)
-		return "", loadError
+		return nil, loadError
 
 	case <-wgDone:
-		return "All data succesfully loaded", nil
+		dataLoaded := &LoadResponse{
+			Buyers:       <-buyersChan,
+			Products:     <-productsChan,
+			Transactions: <-transactionsChan,
+		}
+
+		jsonData, err := json.Marshal(dataLoaded)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal loaded restaurant data: %w", err)
+		}
+
+		return jsonData, nil
 	}
 }
 
-func (dataLoader *DataLoader) loadProducts() error {
+func (dataLoader *DataLoader) loadProducts(errChan chan<- error, productsChan chan<- []Product, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
 	fmt.Println("Loading products...")
 
 	rawProductsLines, pErr := dataLoader.fetchProductsFromAWS()
 	if pErr != nil {
-		return pErr
+		errChan <- pErr
 	}
 
 	products, parseErr := dataLoader.parseProducts(rawProductsLines)
 	if parseErr != nil {
-		return fmt.Errorf("error while parsing products | %w", parseErr)
+		errChan <- fmt.Errorf("error while parsing products | %w", parseErr)
 	}
 
 	jsonProducts, jsonErr := json.Marshal(products)
 	if jsonErr != nil {
 		fmt.Printf("Error while marshalling products for database upload | %v\n", jsonErr)
-		return jsonErr
+		errChan <- jsonErr
 	}
 
 	persistErr := dataLoader.persistProducts(jsonProducts)
 	if persistErr != nil {
 		fmt.Println(persistErr)
-		return persistErr
+		errChan <- persistErr
 	}
 
-	return nil
+	productsChan <- products
+	close(productsChan)
 }
 
 func (dataLoader *DataLoader) fetchProductsFromAWS() ([]string, error) {
@@ -284,19 +293,20 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {
 	return nil
 }
 
-func (dataLoader *DataLoader) loadBuyers() error {
+func (dataLoader *DataLoader) loadBuyers(errChan chan<- error, buyersChan chan<- []Buyer, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
 	fmt.Println("Loading buyers...")
 
 	unfilteredBuyers, uErr := dataLoader.fetchBuyersFromAWS()
 	if uErr != nil {
-		return uErr
+		errChan <- uErr
 	}
 
 	var buyers []BuyerUnmarshall
 
 	addedBuyerIds, bErr := dataLoader.getPersistedBuyersIds()
 	if bErr != nil {
-		return bErr
+		errChan <- bErr
 	}
 
 	for _, b := range unfilteredBuyers {
@@ -309,15 +319,23 @@ func (dataLoader *DataLoader) loadBuyers() error {
 	jsonBuyers, mErr := dataLoader.marshalBuyers(&buyers)
 	if mErr != nil {
 		fmt.Printf("Error while marshalling buyers object for database persistence |%v\n", mErr)
-		return mErr
+		errChan <- mErr
 	}
 
 	persistErr := dataLoader.persistBuyers(jsonBuyers)
 	if persistErr != nil {
-		fmt.Println(persistErr)
+		errChan <- fmt.Errorf("error while persisting buyers | %w", persistErr)
 	}
 
-	return nil
+	var buyersRes []Buyer
+	err := json.Unmarshal(jsonBuyers, &buyersRes)
+	if err != nil {
+		errChan <- err
+	}
+
+	buyersChan <- buyersRes
+	close(buyersChan)
+
 }
 
 func (dataLoader *DataLoader) fetchBuyersFromAWS() ([]BuyerUnmarshall, error) {
@@ -426,29 +444,31 @@ func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) error {
 	return nil
 }
 
-func (dataLoader *DataLoader) loadTransactions() error {
+func (dataLoader *DataLoader) loadTransactions(errChan chan<- error, transactionsChan chan<- []Transaction, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
 	fmt.Println("Loading transactions...")
 
 	rawTransactions, tErr := dataLoader.fetchTransactionsFromAWS()
 	if tErr != nil {
-		return tErr
+		errChan <- tErr
 	}
 
 	var transactions []Transaction = dataLoader.parseTransactions(rawTransactions)
-	rawJsonTransactions, mErr := json.Marshal(transactions)
+	jsonTransactions, mErr := json.Marshal(transactions)
 
 	if mErr != nil {
 		fmt.Printf("Error while marshalling transactions for database persistence | %v\n", mErr)
-		return mErr
+		errChan <- mErr
 	}
 
-	persistErr := dataLoader.persistTransactions(rawJsonTransactions)
+	persistErr := dataLoader.persistTransactions(jsonTransactions)
 
 	if persistErr != nil {
-		fmt.Println(persistErr)
+		errChan <- fmt.Errorf("failed to persist transactions | %w", persistErr)
 	}
 
-	return nil
+	transactionsChan <- transactions
+	close(transactionsChan)
 }
 
 func (dataLoader *DataLoader) fetchTransactionsFromAWS() ([]string, error) {

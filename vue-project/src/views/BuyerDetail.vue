@@ -9,86 +9,95 @@
     </div>
 
     <div class="page-container">
-      <h3 :style="{ color: Colors.BLUE_TEXT }">
-        Comprador: <span style="font-weight: normal">{{ buyerName }}</span>
-      </h3>
+      <p v-if="!dataAvailable" class="no-data-text">
+        El comprador solicitado no existe.
+      </p>
 
-      <!-- Transaction History -->
-      <div>
-        <h2 :style="{ color: Colors.BLUE }">Historial de Transacciones</h2>
+      <div v-if="dataAvailable">
+        <h3 :style="{ color: Colors.BLUE_TEXT }">
+          Comprador: <span style="font-weight: normal">{{ buyerName }}</span>
+        </h3>
 
-        <div class="progress-container">
-          <v-progress-circular
-            :size="70"
-            v-if="loadingBuyerData"
-            indeterminate
-            :color="Colors.GREEN"
-          ></v-progress-circular>
+        <!-- Transaction History -->
+        <div>
+          <h2 :style="{ color: Colors.BLUE }">Historial de Transacciones</h2>
+
+          <div class="progress-container">
+            <v-progress-circular
+              :size="70"
+              v-if="loadingBuyerData"
+              indeterminate
+              :color="Colors.GREEN"
+            ></v-progress-circular>
+          </div>
+
+          <v-data-table
+            v-if="!loadingBuyerData"
+            @click:row="onTransactionClicked"
+            :headers="headers"
+            :items="transactions"
+            :items-per-page="10"
+            class="transactions-table"
+          ></v-data-table>
+
+          <v-dialog
+            width="700"
+            content-class="transaction-dialog"
+            @click:outside="closeDialog"
+            v-model="openTransactionDialog"
+          >
+            <TrasactionCard
+              v-if="openTransactionDialog"
+              :transaction="transaction"
+            />
+          </v-dialog>
         </div>
 
-        <v-data-table
-          v-if="!loadingBuyerData"
-          @click:row="onTransactionClicked"
-          :headers="headers"
-          :items="transactions"
-          :items-per-page="10"
-          class="transactions-table"
-        ></v-data-table>
+        <!-- Buyers with equal IP -->
+        <div style="margin-top: 40px">
+          <h2 id="buyers" :style="{ color: Colors.BLUE }">Compradores</h2>
 
-        <v-dialog
-          width="700"
-          content-class="transaction-dialog"
-          @click:outside="closeDialog"
-          v-model="openTransactionDialog"
-        >
-          <TrasactionCard
-            v-if="openTransactionDialog"
-            :transaction="transaction"
-          />
-        </v-dialog>
-      </div>
+          <div class="progress-container">
+            <v-progress-circular
+              :size="70"
+              v-if="loadingBuyerData"
+              indeterminate
+              :color="Colors.GREEN"
+            ></v-progress-circular>
+          </div>
 
-      <!-- Buyers with equal IP -->
-      <div style="margin-top: 40px">
-        <h2 id="buyers" :style="{ color: Colors.BLUE }">Compradores</h2>
-
-        <div class="progress-container">
-          <v-progress-circular
-            :size="70"
-            v-if="loadingBuyerData"
-            indeterminate
-            :color="Colors.GREEN"
-          ></v-progress-circular>
+          <v-data-table
+            v-if="!loadingBuyerData"
+            @click:row="onBuyerClicked"
+            :headers="buyerHeaders"
+            :items="buyersWithEqIp"
+            :items-per-page="10"
+            class="buyers-table"
+          ></v-data-table>
         </div>
 
-        <v-data-table
-          v-if="!loadingBuyerData"
-          @click:row="onBuyerClicked"
-          :headers="buyerHeaders"
-          :items="buyersWithEqIp"
-          :items-per-page="10"
-          class="buyers-table"
-        ></v-data-table>
-      </div>
+        <!-- Recommended products -->
+        <div style="margin-top: 40px">
+          <h2 :style="{ color: Colors.BLUE }">
+            Productos que podrian interesar a {{ buyerName }}
+          </h2>
 
-      <!-- Recommended products -->
-      <div style="margin-top: 40px">
-        <h2 :style="{ color: Colors.BLUE }">
-          Productos que podrian interesar a {{ buyerName }}
-        </h2>
+          <div class="progress-container">
+            <v-progress-circular
+              :size="70"
+              v-if="loadingBuyerData"
+              indeterminate
+              :color="Colors.GREEN"
+            ></v-progress-circular>
+          </div>
 
-        <div class="progress-container">
-          <v-progress-circular
-            :size="70"
-            v-if="loadingBuyerData"
-            indeterminate
-            :color="Colors.GREEN"
-          ></v-progress-circular>
-        </div>
-
-        <div v-if="!loadingBuyerData" class="product-card-container">
-          <div v-for="product in recommendedProducts" :key="product.ProductId">
-            <ProductCard :product="product" />
+          <div v-if="!loadingBuyerData" class="product-card-container">
+            <div
+              v-for="product in recommendedProducts"
+              :key="product.ProductId"
+            >
+              <ProductCard :product="product" />
+            </div>
           </div>
         </div>
       </div>
@@ -119,6 +128,7 @@ export default Vue.extend({
       openTransactionDialog: false,
       loadingBuyerData: true,
       transaction,
+      dataAvailable: true,
       error: {
         message: "",
         status: "",
@@ -197,6 +207,11 @@ export default Vue.extend({
           this.transactions = this.parseTransactions(
             res.data.TransactionHistory
           );
+
+          if (this.transactions.length === 0) {
+            this.dataAvailable = false;
+          }
+
           this.buyersWithEqIp = this.filterBuyers(res.data.BuyersWithSameIp);
           this.recommendedProducts = res.data.RecommendedProducts;
           this.loadingBuyerData = false;
@@ -300,6 +315,10 @@ export default Vue.extend({
   color: #004e88 !important;
   margin: 0px 5px !important;
   text-transform: capitalize !important;
+}
+
+.no-data-text {
+  width: 50%;
 }
 
 .page-container {

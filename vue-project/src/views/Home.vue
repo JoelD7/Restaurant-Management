@@ -66,6 +66,7 @@
               :style="{ 'background-color': Colors.GREEN }"
               @click="loadData()"
               :loading="loadingBuyers"
+              :disabled="loadingBuyers"
               class="sync-btn"
             >
               Sincronizar
@@ -241,8 +242,10 @@ export default Vue.extend({
         { withCredentials: true }
       )
         .then((r) => {
-          //No need to fetch buyers if the date has previosly been used to sync.
-          if (!r.data.includes("The restaurant data for date")) {
+          /**
+           * If no data is returned then it means the date has already been synched.
+           */
+          if (r.data !== "") {
             this.fetchBuyers();
           } else {
             this.openSnackbar = true;
@@ -287,6 +290,10 @@ export default Vue.extend({
   text-transform: capitalize !important;
   border-radius: 4px !important;
   font-weight: bold !important;
+}
+
+.buyers-btn:disabled {
+  background-color: #ffffffcc !important;
 }
 
 .buyers-table {
@@ -407,6 +414,11 @@ export default Vue.extend({
   color: white !important;
   font-weight: bold !important;
   border-radius: 4px !important;
+}
+
+.sync-btn:disabled {
+  color: #ffffffbd !important;
+  background-color: #78bb1ea8 !important;
 }
 
 .table-header {

@@ -102,7 +102,6 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	}
 
 	writter.Write([]byte(res))
-	writter.Header().Set("Content-Type", "text/plain")
 
 	if !ok {
 		http.Error(writter, http.StatusText(http.StatusUnprocessableEntity),
@@ -423,7 +422,7 @@ func filterRepeatedProducts(products []Product) []Product {
 	})
 
 	var addedIds []string
-	var result []Product
+	var result []Product = []Product{}
 
 	var max int
 	if len(products) < c.MaxProductRecommendations {
