@@ -131,7 +131,7 @@
       :color="Colors.ORANGE"
       elevation="24"
     >
-      Esta fecha ya ha sido sincronizada.
+      {{ snackbarText }}
     </v-snackbar>
   </div>
 </template>
@@ -163,6 +163,7 @@ export default Vue.extend({
         status: "",
       },
       openSnackbar: false,
+      snackbarText: "",
       Colors,
       showDatePicker: false,
       dataAvailable: true,
@@ -253,8 +254,13 @@ export default Vue.extend({
           }
         })
         .catch((error: AxiosError) => {
-          this.error = this.handleRequestError(error);
-          this.openErrorDialog = true;
+          if (error.response && error.response.status === 400) {
+            this.snackbarText = error.response.data;
+            this.openSnackbar = true;
+          } else {
+            this.error = this.handleRequestError(error);
+            this.openErrorDialog = true;
+          }
           this.loadingBuyers = false;
         });
     },

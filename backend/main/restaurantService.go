@@ -84,7 +84,7 @@ func RestaurantCtx(next http.Handler) http.Handler {
 
 func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	requestContext := request.Context()
-	date, ok := requestContext.Value(dateKey).(string)
+	date, okParam := requestContext.Value(dateKey).(string)
 
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
@@ -92,6 +92,17 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	dataLoader := &DataLoader{
 		dateStr: date,
 		txn:     txn,
+	}
+
+	validDate, dateErr := dataLoader.isDateRequestable()
+	if dateErr != nil {
+		http.Error(writter, dateErr.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	if !validDate {
+		http.Error(writter, fmt.Sprintf("La fecha '%s' ya ha sido sincronizada", dataLoader.dateStr), http.StatusBadRequest)
+		return
 	}
 
 	res, loadErr := dataLoader.loadRestaurantData()
@@ -105,7 +116,7 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	writter.WriteHeader(http.StatusCreated)
 	writter.Write([]byte(res))
 
-	if !ok {
+	if !okParam {
 		http.Error(writter, http.StatusText(http.StatusUnprocessableEntity),
 			http.StatusUnprocessableEntity)
 		return

@@ -68,16 +68,6 @@ type LoadResponse struct {
 }
 
 func (dataLoader *DataLoader) loadRestaurantData() ([]byte, error) {
-	ok, dateErr := dataLoader.isDateRequestable()
-	if dateErr != nil {
-		fmt.Println(dateErr)
-		return nil, dateErr
-	}
-
-	if !ok {
-		fmt.Printf("The restaurant data for date %s has already loaded.\n", dataLoader.dateStr)
-		return nil, nil
-	}
 
 	waitGroup := sync.WaitGroup{}
 	errorChan := make(chan error)
@@ -283,6 +273,7 @@ func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {
 	}
 
 	_, err := dgraphClient.NewTxn().Do(context.Background(), req)
+	// fmt.Println(len(res.GetUids()))//GOOD! This is the total of added products
 
 	if err != nil {
 		fmt.Printf("Error while persisting new products | %v\n", err)
