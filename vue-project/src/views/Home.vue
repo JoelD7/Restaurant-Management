@@ -111,14 +111,14 @@
         lista de compradores.
       </p>
 
-      <v-data-table
-        @click:row="onTableRowClicked"
-        v-if="dataAvailable"
-        :headers="headers"
-        :items="buyers"
-        :items-per-page="10"
-        class="buyers-table"
-      ></v-data-table>
+      <!-- Buyers table -->
+      <BuyersTable
+        :buyers="buyers.Buyers"
+        @pageChange="onPageChange"
+        :page="page"
+        :pagLength="pagLength"
+        :pageSize="pageSize"
+      />
 
       <ErrorDialog :open="openErrorDialog" :error="error" />
     </div>
@@ -143,10 +143,10 @@ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { faCalendarAlt } from "@fortawesome/free-regular-svg-icons";
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { format } from "date-fns";
-import { Buyer } from "../types";
 import { Endpoints } from "../constants/constants";
 import Axios, { AxiosError } from "axios";
 import ErrorDialog from "../components/ErrorDialog.vue";
+import BuyersTable from "../components/BuyersTable.vue";
 import { handleRequestError } from "../functions/functions";
 
 library.add(faCalendarAlt);
@@ -165,6 +165,7 @@ export default Vue.extend({
       openSnackbar: false,
       snackbarText: "",
       Colors,
+      pagLength: 10,
       showDatePicker: false,
       dataAvailable: true,
       maxDate: "",
@@ -172,6 +173,8 @@ export default Vue.extend({
       openTransactionDialog: false,
       loadingBuyers: false,
       format,
+      page: 1,
+      pageSize: 10,
       date: "",
       headers: [
         {
@@ -190,11 +193,14 @@ export default Vue.extend({
           class: "table-header",
         },
       ],
-      buyers: [] as Buyer[],
+      buyers: {
+        Buyers: Array,
+        Count: Number,
+      },
     };
   },
 
-  components: { ErrorDialog },
+  components: { ErrorDialog, BuyersTable },
 
   mounted() {
     this.fetchBuyers();
@@ -213,19 +219,26 @@ export default Vue.extend({
     }-${d.getDate()}`;
   },
 
+  watch: {
+    buyers: function () {
+      this.pagLength = this.getPaginationLength();
+    },
+  },
+
   methods: {
+    onPageChange(newPage: number) {
+      this.page = newPage;
+      this.fetchBuyers();
+    },
+
     onDateChange() {
       setTimeout(() => {
         this.showDatePicker = false;
       }, 250);
     },
 
-    onTableRowClicked(item: any) {
-      this.$router.push({ path: `/buyer/${item.BuyerId}` });
-    },
-
     seeBuyers() {
-      if (this.buyers.length === 0) {
+      if (this.buyers.Buyers.length === 0) {
         this.fetchBuyers();
       }
       window.scrollTo(0, document.body.scrollHeight);
@@ -268,12 +281,16 @@ export default Vue.extend({
     fetchBuyers() {
       this.loadingBuyers = true;
 
-      Axios.get(this.Endpoints.ALL_BUYERS, { withCredentials: true })
+      Axios.get(
+        `${this.Endpoints.ALL_BUYERS}?page=${this.page}&pageSize=${this.pageSize}`,
+        { withCredentials: true }
+      )
         .then((res) => {
           this.loadingBuyers = false;
-          this.buyers = res.data.buyers;
+          this.buyers = res.data;
+          this.pagLength = this.getPaginationLength();
 
-          if (this.buyers.length === 0) {
+          if (this.buyers.Buyers.length === 0) {
             this.dataAvailable = false;
           } else {
             this.dataAvailable = true;
@@ -283,6 +300,10 @@ export default Vue.extend({
           this.error = this.handleRequestError(error);
           this.openErrorDialog = true;
         });
+    },
+
+    getPaginationLength() {
+      return Math.ceil(this.buyers.Count / this.pageSize);
     },
 
     handleRequestError,
@@ -425,11 +446,6 @@ export default Vue.extend({
 .sync-btn:disabled {
   color: #ffffffbd !important;
   background-color: #78bb1ea8 !important;
-}
-
-.table-header {
-  font-size: 18px !important;
-  color: #004e88 !important;
 }
 
 .title-col {

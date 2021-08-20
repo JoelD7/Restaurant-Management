@@ -9,35 +9,22 @@ import (
 	c "module/constants"
 	f "module/utils"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 )
 
-type TransactionHolder struct {
-	Transactions []Transaction
-}
-
-type ProductHolder struct {
-	Products []Product
-}
-
-type BuyersById struct {
-	Buyers []Buyer `json:"buyersById"`
-}
-
-type BuyerIdEndpoint struct {
-	TransactionHistory  []Transaction
-	BuyersWithSameIp    []Buyer
-	RecommendedProducts []Product
-}
-
-type key string
-
 const buyerIdKey key = "buyerId"
 const dateKey key = "date"
 const productsKey key = "products"
+const pageKey key = "page"
+const pageSizeKey key = "pageSize"
+const pageBKey key = "pageB"
+const pageSizeBKey key = "pageSizeB"
+const pageTKey key = "pageT"
+const pageSizeTKey key = "pageSizeT"
 
 func Cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
@@ -127,22 +114,77 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
-	query := `
+	ctx := request.Context()
+	page := ctx.Value(pageKey).(int)
+	pageSize := ctx.Value(pageSizeKey).(int)
+	offset := pageSize * page
+
+	query := fmt.Sprintf(`
 	{
-		buyers(func: type(Buyer)){
+		buyers(func: type(Buyer), offset: %v, first: %v){
 			  expand(_all_){}
+		}
+	  }
+	`, offset, pageSize)
+
+	countQuery := `
+	{
+		CountArray(func: type(Buyer)){
+			  total: count(uid)
 		}
 	  }
 	`
 
-	res, err := txn.Query(ctx, query)
-
-	if err != nil {
-		http.Error(writter, err.Error(), http.StatusNotFound)
+	totalBuyers, countErr := countEntities(countQuery)
+	if countErr != nil {
+		http.Error(writter, countErr.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
-	writter.Write(res.Json)
+	qRes, qErr := txn.Query(ctx, query)
+	if qErr != nil {
+		http.Error(writter, qErr.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	type Buyers struct{ Buyers []Buyer }
+	var result Buyers
+	uErr := json.Unmarshal(qRes.Json, &result)
+	if uErr != nil {
+		http.Error(writter, uErr.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	response := &BuyerCollection{
+		Buyers: result.Buyers,
+		Count:  totalBuyers,
+	}
+
+	jsonRes, jsonErr := json.Marshal(response)
+	if jsonErr != nil {
+		http.Error(writter, jsonErr.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	writter.Write(jsonRes)
+}
+
+func countEntities(countQuery string) (int, error) {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	cRes, cErr := txn.Query(ctx, countQuery)
+	if cErr != nil {
+		return 0, cErr
+	}
+
+	var collectionCount CollectionCount
+	uErr := json.Unmarshal(cRes.Json, &collectionCount)
+	if uErr != nil {
+		return 0, uErr
+	}
+
+	return collectionCount.CountArray[0].Total, nil
 }
 
 func ProductsCtx(next http.Handler) http.Handler {
@@ -182,14 +224,91 @@ func BuyerCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
 		buyerId := chi.URLParam(request, "buyerId")
 
+		buyerReqParams, err := getBuyerRequestParams(writter, request)
+		if err != nil {
+			http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+
 		ctx := context.WithValue(request.Context(), buyerIdKey, buyerId)
+		ctx = context.WithValue(ctx, pageBKey, buyerReqParams.PageBParam)
+		ctx = context.WithValue(ctx, pageSizeBKey, buyerReqParams.PageSizeBParam)
+		ctx = context.WithValue(ctx, pageTKey, buyerReqParams.PageTParam)
+		ctx = context.WithValue(ctx, pageSizeTKey, buyerReqParams.PageSizeTParam)
 		next.ServeHTTP(writter, request.WithContext(ctx))
+	})
+}
+
+func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (BuyerRequestParams, error) {
+	pageBParam := request.URL.Query().Get("pageB")
+	pageSizeBParam := request.URL.Query().Get("pageSizeB")
+	pageTParam := request.URL.Query().Get("pageT")
+	pageSizeTParam := request.URL.Query().Get("pageSizeT")
+
+	if pageBParam != "" && pageSizeBParam != "" && pageTParam != "" && pageSizeTParam != "" {
+		pageB, pageBErr := strconv.Atoi(pageBParam)
+		if pageBErr != nil {
+			return BuyerRequestParams{}, pageBErr
+		}
+		pageSizeB, pageSizeBErr := strconv.Atoi(pageSizeBParam)
+		if pageSizeBErr != nil {
+			return BuyerRequestParams{}, pageSizeBErr
+		}
+		pageT, pageTErr := strconv.Atoi(pageTParam)
+		if pageTErr != nil {
+			return BuyerRequestParams{}, pageTErr
+		}
+		pageSizeT, pageSizeTErr := strconv.Atoi(pageSizeTParam)
+		if pageSizeTErr != nil {
+			return BuyerRequestParams{}, pageSizeTErr
+		}
+
+		return BuyerRequestParams{
+			PageBParam:     pageB,
+			PageSizeBParam: pageSizeB,
+			PageTParam:     pageT,
+			PageSizeTParam: pageSizeT,
+		}, nil
+	}
+
+	return BuyerRequestParams{}, fmt.Errorf("missing parameter")
+}
+
+func BuyersCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		pageParam := request.URL.Query().Get("page")
+		pageSizeParam := request.URL.Query().Get("pageSize")
+
+		if pageParam != "" && pageSizeParam != "" {
+			page, e := strconv.Atoi(pageParam)
+			if e != nil {
+				http.Error(writter, e.Error(), http.StatusUnprocessableEntity)
+				return
+			}
+
+			pageSize, er := strconv.Atoi(pageSizeParam)
+			if er != nil {
+				http.Error(writter, er.Error(), http.StatusUnprocessableEntity)
+				return
+			}
+
+			ctx := context.WithValue(request.Context(), pageKey, page)
+			ctx = context.WithValue(ctx, pageSizeKey, pageSize)
+			next.ServeHTTP(writter, request.WithContext(ctx))
+		} else {
+			next.ServeHTTP(writter, request)
+		}
+
 	})
 }
 
 func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	buyerId := ctx.Value(buyerIdKey).(string)
+	pageB := ctx.Value(pageBKey).(int)
+	pageSizeB := ctx.Value(pageSizeBKey).(int)
+	pageT := ctx.Value(pageTKey).(int)
+	pageSizeT := ctx.Value(pageSizeTKey).(int)
 
 	buyerTransactions, transErr := getTransactionHistory(buyerId)
 	if transErr != nil {
@@ -200,7 +319,7 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 
 	var buyerIps []string
 
-	for _, transaction := range buyerTransactions {
+	for _, transaction := range buyerTransactions.Transactions {
 		buyerIps = append(buyerIps, transaction.Ip)
 	}
 
@@ -224,16 +343,44 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	recommendedProducts, productErr := getProductRecommendations(buyerTransactions)
+	recommendedProducts, productErr := getProductRecommendations(buyerTransactions.Transactions)
 	if productErr != nil {
 		err := fmt.Errorf("error while fetching buyer | %w", productErr)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
+	var transactionHistory TransactionCollection
+
+	if ((pageT-1)*pageSizeT)+pageSizeT < buyerTransactions.Count {
+		transactionHistory = TransactionCollection{
+			Transactions: buyerTransactions.Transactions[(pageT-1)*pageSizeT : ((pageT-1)*pageSizeT)+pageSizeT],
+			Count:        buyerTransactions.Count,
+		}
+	} else {
+		transactionHistory = TransactionCollection{
+			Transactions: buyerTransactions.Transactions[(pageT-1)*pageSizeT:],
+			Count:        buyerTransactions.Count,
+		}
+	}
+
+	var buyersWithSameIp BuyerCollection
+
+	if ((pageB-1)*pageSizeB)+pageSizeB < buyersById.Count {
+		buyersWithSameIp = BuyerCollection{
+			Buyers: buyersById.Buyers[(pageB-1)*pageSizeB : ((pageB-1)*pageSizeB)+pageSizeB],
+			Count:  buyersById.Count,
+		}
+	} else {
+		buyersWithSameIp = BuyerCollection{
+			Buyers: buyersById.Buyers[(pageB-1)*pageSizeB:],
+			Count:  buyersById.Count,
+		}
+	}
+
 	dataToReturn := &BuyerIdEndpoint{
-		TransactionHistory:  buyerTransactions,
-		BuyersWithSameIp:    buyersById,
+		TransactionHistory:  transactionHistory,
+		BuyersWithSameIp:    buyersWithSameIp,
 		RecommendedProducts: recommendedProducts,
 	}
 
@@ -248,7 +395,7 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	writter.Write(dataToReturnAsJson)
 }
 
-func getTransactionHistory(buyerId string) ([]Transaction, error) {
+func getTransactionHistory(buyerId string) (TransactionCollection, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -259,10 +406,24 @@ func getTransactionHistory(buyerId string) ([]Transaction, error) {
 		}
 	  }`, buyerId)
 
+	countQuery := fmt.Sprintf(`
+	  {
+		  CountArray(func: type(Transaction))
+			  @filter(eq(BuyerId, "%s")){
+				total: count(uid)
+		  }
+		}
+	  `, buyerId)
+
+	totalTransactions, countErr := countEntities(countQuery)
+	if countErr != nil {
+		return TransactionCollection{}, countErr
+	}
+
 	res, err := txn.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("Error while retrieving transaction history for buyer %s: %v\n", buyerId, err)
-		return nil, err
+		return TransactionCollection{}, err
 	}
 
 	var transactionHistory TransactionHolder
@@ -270,10 +431,13 @@ func getTransactionHistory(buyerId string) ([]Transaction, error) {
 
 	if uErr != nil {
 		fmt.Printf("Error while unmarshalling transactions from database | %v", uErr)
-		return nil, uErr
+		return TransactionCollection{}, uErr
 	}
 
-	return transactionHistory.Transactions, nil
+	return TransactionCollection{
+		Transactions: transactionHistory.Transactions,
+		Count:        totalTransactions,
+	}, nil
 }
 
 func getTransactionsForIps(ips []string) ([]Transaction, error) {
@@ -304,7 +468,7 @@ func getTransactionsForIps(ips []string) ([]Transaction, error) {
 
 }
 
-func getBuyersById(buyerIds []string) ([]Buyer, error) {
+func getBuyersById(buyerIds []string) (BuyerCollection, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -318,20 +482,37 @@ func getBuyersById(buyerIds []string) ([]Buyer, error) {
 		}
 	  }`, fmt.Sprint(buyerIds))
 
+	countQuery := fmt.Sprintf(`
+	  {
+		  CountArray(func: type(Buyer))
+		  	@filter(anyofterms(BuyerId, "%s")){
+				total: count(uid)
+		  }
+		}
+	  `, fmt.Sprint(buyerIds))
+
+	totalBuyers, countErr := countEntities(countQuery)
+	if countErr != nil {
+		return BuyerCollection{}, countErr
+	}
+
 	res, err := txn.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("Error while retrieving buyers: %v\n", err)
-		return nil, err
+		return BuyerCollection{}, err
 	}
 
 	var buyersById BuyersById
 	uErr := json.Unmarshal(res.Json, &buyersById)
 	if uErr != nil {
 		fmt.Printf("Error while unmarshalling buyersById | %v", uErr)
-		return nil, uErr
+		return BuyerCollection{}, uErr
 	}
 
-	return buyersById.Buyers, nil
+	return BuyerCollection{
+		Buyers: buyersById.Buyers,
+		Count:  totalBuyers,
+	}, nil
 }
 
 func getProductRecommendations(buyerTransactions []Transaction) ([]Product, error) {

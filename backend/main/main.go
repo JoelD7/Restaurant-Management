@@ -51,6 +51,7 @@ func main() {
 	})
 
 	router.Route("/buyer", func(router chi.Router) {
+		router.Use(BuyersCtx)
 		router.Get("/all", getBuyers)
 
 		router.Route("/{buyerId}", func(router chi.Router) {

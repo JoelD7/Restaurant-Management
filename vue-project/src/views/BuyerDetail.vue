@@ -31,14 +31,43 @@
             ></v-progress-circular>
           </div>
 
-          <v-data-table
-            v-if="!loadingBuyerData"
-            @click:row="onTransactionClicked"
-            :headers="headers"
-            :items="transactions"
-            :items-per-page="10"
-            class="transactions-table"
-          ></v-data-table>
+          <v-select
+            v-model="pageSizeT"
+            :items="pageSizeOpts"
+            label="Ver"
+          ></v-select>
+
+          <v-simple-table>
+            <template v-slot:default>
+              <thead>
+                <tr>
+                  <th class="table-header">Número</th>
+                  <th class="table-header">Fecha</th>
+                  <th class="table-header">Dispositivo</th>
+                  <th class="table-header">Ip</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="transaction in transactions.Transactions"
+                  @click="onTransactionClicked(transaction)"
+                  :key="transaction.TransactionId"
+                >
+                  <td>{{ transaction.TransactionId }}</td>
+                  <td>{{ transaction["Date"] }}</td>
+                  <td>{{ transaction.Device }}</td>
+                  <td>{{ transaction.Ip }}</td>
+                </tr>
+              </tbody>
+            </template>
+          </v-simple-table>
+
+          <!-- Pagination -->
+          <v-pagination
+            style="margin-top: 10px"
+            v-model="pageT"
+            :length="pagLengthT"
+          ></v-pagination>
 
           <v-dialog
             width="700"
@@ -66,14 +95,20 @@
             ></v-progress-circular>
           </div>
 
-          <v-data-table
-            v-if="!loadingBuyerData"
-            @click:row="onBuyerClicked"
-            :headers="buyerHeaders"
-            :items="buyersWithEqIp"
-            :items-per-page="10"
-            class="buyers-table"
-          ></v-data-table>
+          <v-select
+            v-model="pageSizeB"
+            :items="pageSizeOpts"
+            label="Ver"
+          ></v-select>
+
+          <!-- Buyers table -->
+          <BuyersTable
+            :buyers="buyersWithEqIp.Buyers"
+            @pageChange="onBuyersPageChange"
+            :page="pageB"
+            :pagLength="pagLengthB"
+            :pageSize="pageSizeB"
+          />
         </div>
 
         <!-- Recommended products -->
@@ -112,6 +147,7 @@ import Vue from "vue";
 import { Colors } from "../assets/colors";
 import TrasactionCard from "../components/TransactionCard.vue";
 import ProductCard from "../components/ProductCard.vue";
+import BuyersTable from "../components/BuyersTable.vue";
 import { transaction, dateFormat } from "../functions/functions";
 import { Buyer, Product, Transaction } from "../types";
 import Axios, { AxiosError } from "axios";
@@ -121,9 +157,16 @@ import ErrorDialog from "../components/ErrorDialog.vue";
 
 export default Vue.extend({
   name: "BuyerDetail",
-  components: { TrasactionCard, ProductCard, ErrorDialog },
+  components: { TrasactionCard, ProductCard, ErrorDialog, BuyersTable },
   data() {
     return {
+      pageSizeOpts: [5, 10, 15, 20],
+      pageB: 1,
+      pageSizeB: 10,
+      pagLengthB: 10,
+      pageT: 1,
+      pageSizeT: 10,
+      pagLengthT: 10,
       Endpoints,
       openTransactionDialog: false,
       loadingBuyerData: true,
@@ -160,7 +203,10 @@ export default Vue.extend({
           class: "transaction-table-header",
         },
       ],
-      transactions: [] as Transaction[],
+      transactions: {
+        Transactions: [] as Transaction[],
+        Count: Number,
+      },
       buyerHeaders: [
         {
           text: "ID",
@@ -178,7 +224,10 @@ export default Vue.extend({
           class: "transaction-table-header",
         },
       ],
-      buyersWithEqIp: [] as Buyer[],
+      buyersWithEqIp: {
+        Buyers: [] as Buyer[],
+        Count: Number,
+      },
       recommendedProducts: [] as Product[],
     };
   },
@@ -187,6 +236,26 @@ export default Vue.extend({
     $route() {
       this.fetchBuyer();
     },
+
+    buyersWithEqIp: function () {
+      this.pagLengthB = this.getPaginationLengthB();
+    },
+
+    transactions: function () {
+      this.pagLengthT = this.getPaginationLengthT();
+    },
+
+    pageT: function (newVal) {
+      this.onTransactionPageChange(newVal);
+    },
+
+    pageSizeT: function () {
+      this.onTransactionPageChange(1);
+    },
+
+    pageSizeB: function () {
+      this.onBuyersPageChange(1);
+    },
   },
 
   mounted() {
@@ -194,25 +263,39 @@ export default Vue.extend({
   },
 
   methods: {
+    onTransactionPageChange(newPage: number) {
+      this.pageT = newPage;
+      this.fetchBuyer();
+    },
+
+    onBuyersPageChange(newPage: number) {
+      this.pageB = newPage;
+      this.fetchBuyer();
+    },
+
     handleRequestError,
+
     fetchBuyer() {
       window.scrollTo(0, 0);
 
       this.loadingBuyerData = true;
 
-      Axios.get(`${this.Endpoints.BUYER}/${this.$route.params.id}`, {
-        withCredentials: true,
-      })
+      Axios.get(
+        `${this.Endpoints.BUYER}/${this.$route.params.id}?pageB=${this.pageB}&pageSizeB=${this.pageSizeB}&pageT=${this.pageT}&pageSizeT=${this.pageSizeT}`,
+        {
+          withCredentials: true,
+        }
+      )
         .then((res) => {
           this.transactions = this.parseTransactions(
             res.data.TransactionHistory
           );
 
-          if (this.transactions.length === 0) {
+          if (this.transactions.Transactions.length === 0) {
             this.dataAvailable = false;
           }
 
-          this.buyersWithEqIp = this.filterBuyers(res.data.BuyersWithSameIp);
+          this.buyersWithEqIp = res.data.BuyersWithSameIp;
           this.recommendedProducts = res.data.RecommendedProducts;
           this.loadingBuyerData = false;
         })
@@ -228,22 +311,24 @@ export default Vue.extend({
      * capitalizes the 'device' field.
      */
     parseTransactions(transactionHistory: any) {
-      return transactionHistory.map((t: any) => {
+      let array = transactionHistory.Transactions.map((t: any) => {
         let Device = t.Device.slice(0, 1).toUpperCase() + t.Device.slice(1);
         let date = dateFormat(new Date(t.Date));
 
         return { ...t, Device, Date: date };
       });
+
+      return { ...transactionHistory, Transactions: array };
     },
 
     /**
      * Filters out repeated buyers and the currently seen buyer.
      */
-    filterBuyers(buyersWithSameIp: any): Buyer[] {
+    filterBuyers(buyersWithSameIp: any): any {
       let addedBuyers: string[] = [];
       let buyersBuffer: Buyer[] = [];
 
-      buyersWithSameIp.forEach((b: any) => {
+      buyersWithSameIp.Buyers.forEach((b: any) => {
         if (
           !addedBuyers.includes(b.BuyerId) &&
           b.BuyerId !== this.$route.params.id
@@ -257,7 +342,9 @@ export default Vue.extend({
         }
       });
 
-      return buyersBuffer;
+      buyersWithSameIp = { ...buyersWithSameIp, Buyers: buyersBuffer };
+
+      return buyersWithSameIp;
     },
 
     closeDialog() {
@@ -266,13 +353,21 @@ export default Vue.extend({
 
     onTransactionClicked(item: any) {
       this.openTransactionDialog = true;
-      this.transaction = this.transactions.filter(
+      this.transaction = this.transactions.Transactions.filter(
         (t) => t.TransactionId === item.TransactionId
       )[0];
     },
 
     onBuyerClicked(item: any) {
       this.$router.push({ path: `/buyer/${item.BuyerId}` });
+    },
+
+    getPaginationLengthB() {
+      return Math.ceil(this.buyersWithEqIp.Count / this.pageSizeB);
+    },
+
+    getPaginationLengthT() {
+      return Math.ceil(this.transactions.Count / this.pageSizeT);
     },
   },
 });
