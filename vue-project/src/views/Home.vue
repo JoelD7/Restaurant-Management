@@ -195,7 +195,7 @@ export default Vue.extend({
       ],
       buyers: {
         Buyers: Array,
-        Count: Number,
+        Count: 0,
       },
     };
   },

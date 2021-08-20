@@ -31,55 +31,22 @@
             ></v-progress-circular>
           </div>
 
-          <v-select
-            v-model="pageSizeT"
-            :items="pageSizeOpts"
-            label="Ver"
-          ></v-select>
+          <div style="width: 100px" v-if="!loadingBuyerData">
+            <v-select
+              v-model="pageSizeT"
+              :items="pageSizeOpts"
+              label="Ver"
+            ></v-select>
+          </div>
 
-          <v-simple-table>
-            <template v-slot:default>
-              <thead>
-                <tr>
-                  <th class="table-header">Número</th>
-                  <th class="table-header">Fecha</th>
-                  <th class="table-header">Dispositivo</th>
-                  <th class="table-header">Ip</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="transaction in transactions.Transactions"
-                  @click="onTransactionClicked(transaction)"
-                  :key="transaction.TransactionId"
-                >
-                  <td>{{ transaction.TransactionId }}</td>
-                  <td>{{ transaction["Date"] }}</td>
-                  <td>{{ transaction.Device }}</td>
-                  <td>{{ transaction.Ip }}</td>
-                </tr>
-              </tbody>
-            </template>
-          </v-simple-table>
-
-          <!-- Pagination -->
-          <v-pagination
-            style="margin-top: 10px"
-            v-model="pageT"
-            :length="pagLengthT"
-          ></v-pagination>
-
-          <v-dialog
-            width="700"
-            content-class="transaction-dialog"
-            @click:outside="closeDialog"
-            v-model="openTransactionDialog"
-          >
-            <TrasactionCard
-              v-if="openTransactionDialog"
-              :transaction="transaction"
-            />
-          </v-dialog>
+          <TransactionsTable
+            v-if="!loadingBuyerData"
+            :transactions="transactions.Transactions"
+            @pageChange="onTransactionsPageChange"
+            :page="pageT"
+            :pagLength="pagLengthT"
+            :pageSize="pageSizeT"
+          />
         </div>
 
         <!-- Buyers with equal IP -->
@@ -95,14 +62,18 @@
             ></v-progress-circular>
           </div>
 
-          <v-select
-            v-model="pageSizeB"
-            :items="pageSizeOpts"
-            label="Ver"
-          ></v-select>
+          <div style="width: 100px">
+            <v-select
+              v-model="pageSizeB"
+              v-if="!loadingBuyerData"
+              :items="pageSizeOpts"
+              label="Ver"
+            ></v-select>
+          </div>
 
           <!-- Buyers table -->
           <BuyersTable
+            v-if="!loadingBuyerData"
             :buyers="buyersWithEqIp.Buyers"
             @pageChange="onBuyersPageChange"
             :page="pageB"
@@ -145,19 +116,24 @@
 <script lang="ts">
 import Vue from "vue";
 import { Colors } from "../assets/colors";
-import TrasactionCard from "../components/TransactionCard.vue";
 import ProductCard from "../components/ProductCard.vue";
 import BuyersTable from "../components/BuyersTable.vue";
-import { transaction, dateFormat } from "../functions/functions";
+import { dateFormat } from "../functions/functions";
 import { Buyer, Product, Transaction } from "../types";
 import Axios, { AxiosError } from "axios";
 import { handleRequestError } from "../functions/functions";
 import { Endpoints } from "../constants/constants";
 import ErrorDialog from "../components/ErrorDialog.vue";
+import TransactionsTable from "../components/TransactionsTable.vue";
 
 export default Vue.extend({
   name: "BuyerDetail",
-  components: { TrasactionCard, ProductCard, ErrorDialog, BuyersTable },
+  components: {
+    ProductCard,
+    ErrorDialog,
+    BuyersTable,
+    TransactionsTable,
+  },
   data() {
     return {
       pageSizeOpts: [5, 10, 15, 20],
@@ -168,9 +144,7 @@ export default Vue.extend({
       pageSizeT: 10,
       pagLengthT: 10,
       Endpoints,
-      openTransactionDialog: false,
       loadingBuyerData: true,
-      transaction,
       dataAvailable: true,
       error: {
         message: "",
@@ -205,7 +179,7 @@ export default Vue.extend({
       ],
       transactions: {
         Transactions: [] as Transaction[],
-        Count: Number,
+        Count: 0,
       },
       buyerHeaders: [
         {
@@ -226,7 +200,7 @@ export default Vue.extend({
       ],
       buyersWithEqIp: {
         Buyers: [] as Buyer[],
-        Count: Number,
+        Count: 0,
       },
       recommendedProducts: [] as Product[],
     };
@@ -296,6 +270,7 @@ export default Vue.extend({
           }
 
           this.buyersWithEqIp = res.data.BuyersWithSameIp;
+          this.buyerName = res.data.Name;
           this.recommendedProducts = res.data.RecommendedProducts;
           this.loadingBuyerData = false;
         })
@@ -319,43 +294,6 @@ export default Vue.extend({
       });
 
       return { ...transactionHistory, Transactions: array };
-    },
-
-    /**
-     * Filters out repeated buyers and the currently seen buyer.
-     */
-    filterBuyers(buyersWithSameIp: any): any {
-      let addedBuyers: string[] = [];
-      let buyersBuffer: Buyer[] = [];
-
-      buyersWithSameIp.Buyers.forEach((b: any) => {
-        if (
-          !addedBuyers.includes(b.BuyerId) &&
-          b.BuyerId !== this.$route.params.id
-        ) {
-          addedBuyers.push(b.BuyerId);
-          buyersBuffer.push(b);
-        }
-
-        if (b.BuyerId === this.$route.params.id) {
-          this.buyerName = b.Name;
-        }
-      });
-
-      buyersWithSameIp = { ...buyersWithSameIp, Buyers: buyersBuffer };
-
-      return buyersWithSameIp;
-    },
-
-    closeDialog() {
-      this.openTransactionDialog = false;
-    },
-
-    onTransactionClicked(item: any) {
-      this.openTransactionDialog = true;
-      this.transaction = this.transactions.Transactions.filter(
-        (t) => t.TransactionId === item.TransactionId
-      )[0];
     },
 
     onBuyerClicked(item: any) {

@@ -305,10 +305,6 @@ func BuyersCtx(next http.Handler) http.Handler {
 func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	buyerId := ctx.Value(buyerIdKey).(string)
-	pageB := ctx.Value(pageBKey).(int)
-	pageSizeB := ctx.Value(pageSizeBKey).(int)
-	pageT := ctx.Value(pageTKey).(int)
-	pageSizeT := ctx.Value(pageSizeTKey).(int)
 
 	buyerTransactions, transErr := getTransactionHistory(buyerId)
 	if transErr != nil {
@@ -336,7 +332,7 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		buyerIds = append(buyerIds, transaction.BuyerId)
 	}
 
-	buyersById, buyerErr := getBuyersById(buyerIds)
+	buyersById, buyerErr := getBuyersById(buyerIds, buyerId)
 	if buyerErr != nil {
 		err := fmt.Errorf("error while fetching buyer | %w", buyerErr)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
@@ -350,35 +346,16 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	var transactionHistory TransactionCollection
+	transactionHistory, buyersWithSameIp := getPagedCollections(request, buyerTransactions, buyersById)
 
-	if ((pageT-1)*pageSizeT)+pageSizeT < buyerTransactions.Count {
-		transactionHistory = TransactionCollection{
-			Transactions: buyerTransactions.Transactions[(pageT-1)*pageSizeT : ((pageT-1)*pageSizeT)+pageSizeT],
-			Count:        buyerTransactions.Count,
-		}
-	} else {
-		transactionHistory = TransactionCollection{
-			Transactions: buyerTransactions.Transactions[(pageT-1)*pageSizeT:],
-			Count:        buyerTransactions.Count,
-		}
-	}
-
-	var buyersWithSameIp BuyerCollection
-
-	if ((pageB-1)*pageSizeB)+pageSizeB < buyersById.Count {
-		buyersWithSameIp = BuyerCollection{
-			Buyers: buyersById.Buyers[(pageB-1)*pageSizeB : ((pageB-1)*pageSizeB)+pageSizeB],
-			Count:  buyersById.Count,
-		}
-	} else {
-		buyersWithSameIp = BuyerCollection{
-			Buyers: buyersById.Buyers[(pageB-1)*pageSizeB:],
-			Count:  buyersById.Count,
-		}
+	buyerName, bnErr := fetchBuyerName(buyerId)
+	if bnErr != nil {
+		http.Error(writter, bnErr.Error(), http.StatusUnprocessableEntity)
+		return
 	}
 
 	dataToReturn := &BuyerIdEndpoint{
+		Name:                buyerName,
 		TransactionHistory:  transactionHistory,
 		BuyersWithSameIp:    buyersWithSameIp,
 		RecommendedProducts: recommendedProducts,
@@ -468,28 +445,26 @@ func getTransactionsForIps(ips []string) ([]Transaction, error) {
 
 }
 
-func getBuyersById(buyerIds []string) (BuyerCollection, error) {
+func getBuyersById(buyerIds []string, buyerId string) (BuyerCollection, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
 	query := fmt.Sprintf(`{
 		buyersById(func: type(Buyer))
-			@filter(anyofterms(BuyerId, "%s")) {
+			@filter(anyofterms(BuyerId, "%s") and not anyofterms(BuyerId, "%s")) {
 			  BuyerId
 			  Age
 			  Name
 			  Date
 		}
-	  }`, fmt.Sprint(buyerIds))
+	}`, fmt.Sprint(buyerIds), buyerId)
 
-	countQuery := fmt.Sprintf(`
-	  {
-		  CountArray(func: type(Buyer))
-		  	@filter(anyofterms(BuyerId, "%s")){
+	countQuery := fmt.Sprintf(`{
+	CountArray(func: type(Buyer))
+			@filter(anyofterms(BuyerId, "%s") and not anyofterms(BuyerId, "%s")) {
 				total: count(uid)
-		  }
 		}
-	  `, fmt.Sprint(buyerIds))
+	}`, fmt.Sprint(buyerIds), buyerId)
 
 	totalBuyers, countErr := countEntities(countQuery)
 	if countErr != nil {
@@ -595,6 +570,48 @@ func getSimilarProductTransactions(boughtProducts []string) ([]Transaction, erro
 	return transactionsForBuyerProductsRes.Transactions, nil
 }
 
+/*
+	Applies pagination to the buyer's transactions and to the list of
+	buyers using the same IP.
+*/
+func getPagedCollections(request *http.Request, buyerTransactions TransactionCollection,
+	buyersById BuyerCollection) (TransactionCollection, BuyerCollection) {
+	ctx := request.Context()
+	pageB := ctx.Value(pageBKey).(int)
+	pageSizeB := ctx.Value(pageSizeBKey).(int)
+	pageT := ctx.Value(pageTKey).(int)
+	pageSizeT := ctx.Value(pageSizeTKey).(int)
+
+	var transactionHistory TransactionCollection
+
+	if ((pageT-1)*pageSizeT)+pageSizeT < buyerTransactions.Count {
+		transactionHistory = TransactionCollection{
+			Transactions: buyerTransactions.Transactions[(pageT-1)*pageSizeT : ((pageT-1)*pageSizeT)+pageSizeT],
+			Count:        buyerTransactions.Count,
+		}
+	} else {
+		transactionHistory = TransactionCollection{
+			Transactions: buyerTransactions.Transactions[(pageT-1)*pageSizeT:],
+			Count:        buyerTransactions.Count,
+		}
+	}
+	var buyersWithSameIp BuyerCollection
+
+	if ((pageB-1)*pageSizeB)+pageSizeB < buyersById.Count {
+		buyersWithSameIp = BuyerCollection{
+			Buyers: buyersById.Buyers[(pageB-1)*pageSizeB : ((pageB-1)*pageSizeB)+pageSizeB],
+			Count:  buyersById.Count,
+		}
+	} else {
+		buyersWithSameIp = BuyerCollection{
+			Buyers: buyersById.Buyers[(pageB-1)*pageSizeB:],
+			Count:  buyersById.Count,
+		}
+	}
+
+	return transactionHistory, buyersWithSameIp
+}
+
 func filterBoughtProductIds(boughtProducts []string, productIdsBuffer []string) []string {
 	var filteredProductIds []string
 
@@ -637,4 +654,35 @@ func filterRepeatedProducts(products []Product) []Product {
 	}
 
 	return result
+}
+
+func fetchBuyerName(buyerId string) (string, error) {
+	txn := dgraphClient.NewTxn()
+	defer txn.Discard(ctx)
+
+	query := fmt.Sprintf(`{
+		buyerName(func: type(Buyer))
+			@filter(eq(BuyerId, "%s")) {
+			  Name
+		}
+	}`, buyerId)
+
+	type BuyerName struct {
+		BuyerName []struct {
+			Name string
+		}
+	}
+	var bn BuyerName
+
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		return "", err
+	}
+
+	uErr := json.Unmarshal(res.Json, &bn)
+	if uErr != nil {
+		return "", uErr
+	}
+
+	return bn.BuyerName[0].Name, nil
 }

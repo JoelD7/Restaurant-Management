@@ -13,6 +13,7 @@ type BuyersById struct {
 }
 
 type BuyerIdEndpoint struct {
+	Name                string
 	TransactionHistory  TransactionCollection
 	BuyersWithSameIp    BuyerCollection
 	RecommendedProducts []Product

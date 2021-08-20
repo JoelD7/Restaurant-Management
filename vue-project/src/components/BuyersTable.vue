@@ -27,6 +27,7 @@
     <v-pagination
       style="margin-top: 10px"
       v-model="page"
+      :total-visible="5"
       :length="pagLength"
     ></v-pagination>
   </div>
@@ -90,5 +91,9 @@ export default Vue.extend({
 .table-header {
   font-size: 18px !important;
   color: #004e88 !important;
+}
+
+.page-size-select {
+  width: 100px !important;
 }
 </style>
