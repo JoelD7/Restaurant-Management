@@ -29,6 +29,24 @@ type APIDescriptor struct {
 
 var ctx context.Context = context.Background()
 var dgraphClient = newDGraphClient()
+var descriptor []APIDescriptor = []APIDescriptor{
+	{
+		Method:      http.MethodPost,
+		Endpoint:    "/restaurant-data",
+		Description: "Loads all restaurant related data of the specified date to the database.",
+		Body:        "'date' in yyyy-MM-DD format",
+	},
+	{
+		Method:      http.MethodGet,
+		Endpoint:    "/buyer/all",
+		Description: "Returns all the buyers currently saved on the database.",
+	},
+	{
+		Method:      http.MethodGet,
+		Endpoint:    "/buyer/{buyerId}",
+		Description: "Returns the buyer with the id 'buyerId'.",
+	},
+}
 
 const port string = "9000"
 
@@ -45,7 +63,7 @@ func main() {
 	})
 
 	router.Route("/restaurant-data", func(router chi.Router) {
-		router.Use(RestaurantCtx)
+		router.Use(restaurantCtx)
 
 		router.Post("/", loadRestaurantData)
 	})
@@ -67,6 +85,7 @@ func main() {
 	})
 
 	fmt.Printf("Server listening on port %s\n", port)
+	// Manejar error de ListenAndServe
 	http.ListenAndServe(":"+port, router)
 
 }
@@ -83,31 +102,12 @@ func newDGraphClient() *dgo.Dgraph {
 }
 
 func describeAPI(writter http.ResponseWriter, request *http.Request) {
-	var descriptor []APIDescriptor = []APIDescriptor{
-		{
-			Method:      "POST",
-			Endpoint:    "/restaurant-data",
-			Description: "Loads all restaurant related data of the specified date to the database.",
-			Body:        "'date' in yyyy-MM-DD format",
-		},
-		{
-			Method:      "GET",
-			Endpoint:    "/buyer/all",
-			Description: "Returns all the buyers currently saved on the database.",
-		},
-		{
-			Method:      "GET",
-			Endpoint:    "/buyer/{buyerId}",
-			Description: "Returns the buyer with the id 'buyerId'.",
-		},
-	}
-
 	jsonDescriptor, err := json.Marshal(descriptor)
 
 	if err != nil {
-		fmt.Printf("Error while marshalling API descriptor: %v\n", err)
+		http.Error(writter, "error while processing response", http.StatusInternalServerError)
+		return
 	}
 
 	writter.Write(jsonDescriptor)
-
 }

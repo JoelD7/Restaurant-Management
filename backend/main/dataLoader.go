@@ -87,8 +87,8 @@ func (dataLoader *DataLoader) loadRestaurantData() ([]byte, error) {
 	}()
 
 	select {
-	case loadError := <-errorChan:
-		return nil, loadError
+	case err := <-errorChan:
+		return nil, err
 
 	case <-wgDone:
 		dataLoader.txn.Commit(context.Background())
@@ -112,29 +112,28 @@ func (dataLoader *DataLoader) loadProducts(errChan chan<- error, productsChan ch
 	defer waitGroup.Done()
 	fmt.Println("Loading products...")
 
-	rawProductsLines, pErr := dataLoader.fetchProductsFromAWS()
-	if pErr != nil {
-		errChan <- pErr
+	rawProductsLines, err := dataLoader.fetchProductsFromAWS()
+	if err != nil {
+		errChan <- err
 		return
 	}
 
-	products, parseErr := dataLoader.parseProducts(rawProductsLines)
-	if parseErr != nil {
-		errChan <- fmt.Errorf("error while parsing products | %w", parseErr)
+	products, err := dataLoader.parseProducts(rawProductsLines)
+	if err != nil {
+		errChan <- fmt.Errorf("error while parsing products | %w", err)
 		return
 	}
 
-	jsonProducts, jsonErr := json.Marshal(products)
-	if jsonErr != nil {
-		fmt.Printf("Error while marshalling products for database upload | %v\n", jsonErr)
-		errChan <- jsonErr
+	jsonProducts, err := json.Marshal(products)
+	if err != nil {
+		fmt.Printf("Error while marshalling products for database upload | %v\n", err)
+		errChan <- err
 		return
 	}
 
-	persistErr := dataLoader.persistProducts(jsonProducts)
-	if persistErr != nil {
-		fmt.Println(persistErr)
-		errChan <- persistErr
+	err = dataLoader.persistProducts(jsonProducts)
+	if err != nil {
+		errChan <- err
 		return
 	}
 
@@ -143,16 +142,16 @@ func (dataLoader *DataLoader) loadProducts(errChan chan<- error, productsChan ch
 }
 
 func (dataLoader *DataLoader) fetchProductsFromAWS() ([]string, error) {
-	req, reqErr := http.NewRequest("GET", c.ProductURL, nil)
-	if reqErr != nil {
-		fmt.Println(reqErr)
-		return nil, reqErr
+	req, err := http.NewRequest("GET", c.ProductURL, nil)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
 	}
 
 	q := req.URL.Query()
-	timestamp, tErr := f.DateStringToTimestamp(dataLoader.dateStr)
-	if tErr != nil {
-		return nil, tErr
+	timestamp, err := f.DateStringToTimestamp(dataLoader.dateStr)
+	if err != nil {
+		return nil, err
 	}
 
 	var dateAsTimestamp string = fmt.Sprint(timestamp)
@@ -161,27 +160,33 @@ func (dataLoader *DataLoader) fetchProductsFromAWS() ([]string, error) {
 	req.URL.RawQuery = q.Encode()
 	requestUrl := req.URL.String()
 
-	resp, respErr := http.Get(requestUrl)
-	if respErr != nil {
-		fmt.Printf("Error in response for GET request: '%s' | %v\n", requestUrl, respErr)
-		return nil, respErr
+	resp, err := http.Get(requestUrl)
+	if err != nil {
+		fmt.Printf("Error in response for GET request: '%s' | %v\n", requestUrl, err)
+		return nil, err
 	}
 
-	body, resBodyError := io.ReadAll(resp.Body)
-	if resBodyError != nil {
-		fmt.Printf("Error while reading response body for request '%s' | %v\n", requestUrl, resBodyError)
-		return nil, resBodyError
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error while reading response body for request '%s' | %v\n", requestUrl, err)
+		return nil, err
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		err = resp.Body.Close()
+	}()
+	if err != nil {
+		return nil, err
+	}
 
 	rawProductsLines := strings.Split(string(body), "\n")
 	return rawProductsLines, nil
 }
 
 func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Product, error) {
-	addedProductIds, pErr := dataLoader.getPersistedProductsIds()
-	if pErr != nil {
-		return nil, pErr
+	addedProductIds, err := dataLoader.getPersistedProductsIds()
+	if err != nil {
+		return nil, err
 	}
 
 	var products []Product
@@ -211,16 +216,16 @@ func (dataLoader *DataLoader) parseProducts(rawProductsLines []string) ([]Produc
 			firstQuotePos := strings.Index(line, `"`)
 			lastQuotePos := strings.LastIndex(line, `"`)
 			name = strings.ReplaceAll(line[firstQuotePos+1:lastQuotePos], "&quot;", "'")
-			price, priceErr = d.NewFromString(lineSections[len(lineSections)-1])
+			price, err = d.NewFromString(lineSections[len(lineSections)-1])
 		} else {
 			id = lineSections[0]
 			name = strings.ReplaceAll(lineSections[1], "&quot;", "'")
-			price, priceErr = d.NewFromString(lineSections[2])
+			price, err = d.NewFromString(lineSections[2])
 		}
 
-		if priceErr != nil {
+		if err != nil {
 			fmt.Printf("parseProducts: Error while casting products prices from string to decimal.Decimal | %v\n", priceErr)
-			return nil, priceErr
+			return nil, err
 		}
 
 		newProduct := Product{
@@ -248,15 +253,15 @@ func (dataLoader *DataLoader) getPersistedProductsIds() ([]string, error) {
 		}
 	  }`
 
-	res, qErr := dataLoader.txn.Query(ctx, query)
-	if qErr != nil {
-		return nil, fmt.Errorf("error while retrieving products from database | %w", qErr)
+	res, err := dataLoader.txn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("error while retrieving products from database | %w", err)
 	}
 
 	var productHolder ProductHolder
-	uErr := json.Unmarshal(res.Json, &productHolder)
-	if uErr != nil {
-		return nil, fmt.Errorf("error while unmarshalling products retrieved from database | %w", uErr)
+	err = json.Unmarshal(res.Json, &productHolder)
+	if err != nil {
+		return nil, fmt.Errorf("error while unmarshalling products retrieved from database | %w", err)
 	}
 
 	for _, product := range productHolder.Products {
@@ -290,17 +295,17 @@ func (dataLoader *DataLoader) loadBuyers(errChan chan<- error, buyersChan chan<-
 	defer waitGroup.Done()
 	fmt.Println("Loading buyers...")
 
-	unfilteredBuyers, uErr := dataLoader.fetchBuyersFromAWS()
-	if uErr != nil {
-		errChan <- uErr
+	unfilteredBuyers, err := dataLoader.fetchBuyersFromAWS()
+	if err != nil {
+		errChan <- err
 		return
 	}
 
 	var buyers []BuyerUnmarshall
 
-	addedBuyerIds, bErr := dataLoader.getPersistedBuyersIds()
-	if bErr != nil {
-		errChan <- bErr
+	addedBuyerIds, err := dataLoader.getPersistedBuyersIds()
+	if err != nil {
+		errChan <- err
 		return
 	}
 
@@ -311,21 +316,21 @@ func (dataLoader *DataLoader) loadBuyers(errChan chan<- error, buyersChan chan<-
 		}
 	}
 
-	jsonBuyers, mErr := dataLoader.marshalBuyers(&buyers)
-	if mErr != nil {
-		fmt.Printf("Error while marshalling buyers object for database persistence |%v\n", mErr)
-		errChan <- mErr
+	jsonBuyers, err := dataLoader.marshalBuyers(&buyers)
+	if err != nil {
+		fmt.Printf("Error while marshalling buyers object for database persistence |%v\n", err)
+		errChan <- err
 		return
 	}
 
-	persistErr := dataLoader.persistBuyers(jsonBuyers)
-	if persistErr != nil {
-		errChan <- fmt.Errorf("error while persisting buyers | %w", persistErr)
+	err = dataLoader.persistBuyers(jsonBuyers)
+	if err != nil {
+		errChan <- fmt.Errorf("error while persisting buyers | %w", err)
 		return
 	}
 
 	var buyersRes []Buyer
-	err := json.Unmarshal(jsonBuyers, &buyersRes)
+	err = json.Unmarshal(jsonBuyers, &buyersRes)
 	if err != nil {
 		errChan <- err
 		return
@@ -338,16 +343,16 @@ func (dataLoader *DataLoader) loadBuyers(errChan chan<- error, buyersChan chan<-
 
 func (dataLoader *DataLoader) fetchBuyersFromAWS() ([]BuyerUnmarshall, error) {
 	//Form request URL
-	req, reqErr := http.NewRequest("GET", c.BuyersURL, nil)
-	if reqErr != nil {
-		fmt.Printf("Error while forming GET request '%s' | %v\n", c.BuyersURL, reqErr)
-		return nil, reqErr
+	req, err := http.NewRequest("GET", c.BuyersURL, nil)
+	if err != nil {
+		fmt.Printf("Error while forming GET request '%s' | %v\n", c.BuyersURL, err)
+		return nil, err
 	}
 
 	q := req.URL.Query()
-	timestamp, tErr := f.DateStringToTimestamp(dataLoader.dateStr)
-	if tErr != nil {
-		return nil, tErr
+	timestamp, err := f.DateStringToTimestamp(dataLoader.dateStr)
+	if err != nil {
+		return nil, err
 	}
 
 	var dateAsTimestamp string = fmt.Sprint(timestamp)
@@ -357,25 +362,30 @@ func (dataLoader *DataLoader) fetchBuyersFromAWS() ([]BuyerUnmarshall, error) {
 	requestUrl := req.URL.String()
 
 	// Make GET request
-	resp, resErr := http.Get(requestUrl)
-	if resErr != nil {
-		fmt.Printf("Error in response for GET request '%s' | %v\n", requestUrl, resErr)
-		return nil, resErr
+	resp, err := http.Get(requestUrl)
+	if err != nil {
+		fmt.Printf("Error in response for GET request '%s' | %v\n", requestUrl, err)
+		return nil, err
 	}
 
 	// Read response body
-	body, bodyReadErr := io.ReadAll(resp.Body)
-	if bodyReadErr != nil {
-		fmt.Printf("Error reading body of response for GET request '%s' | %v\n", requestUrl, bodyReadErr)
-		return nil, bodyReadErr
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading body of response for GET request '%s' | %v\n", requestUrl, err)
+		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = resp.Body.Close()
+	}()
+	if err != nil {
+		return nil, err
+	}
 
 	var unfilteredBuyers []BuyerUnmarshall
-	uErr := json.Unmarshal(body, &unfilteredBuyers)
-	if uErr != nil {
-		fmt.Printf("Error while unmarshalling buyers object obtained from response for GET request '%s'\n| %v", requestUrl, uErr)
-		return nil, uErr
+	err = json.Unmarshal(body, &unfilteredBuyers)
+	if err != nil {
+		fmt.Printf("Error while unmarshalling buyers object obtained from response for GET request '%s'\n| %v", requestUrl, err)
+		return nil, err
 	}
 
 	return unfilteredBuyers, nil
@@ -395,9 +405,9 @@ func (dataLoader *DataLoader) getPersistedBuyersIds() ([]string, error) {
 	}
 
 	var buyerHolder BuyerHolder
-	uErr := json.Unmarshal(res.Json, &buyerHolder)
-	if uErr != nil {
-		return nil, fmt.Errorf("error while unmarshalling buyers retrieved from database | %w", uErr)
+	err = json.Unmarshal(res.Json, &buyerHolder)
+	if err != nil {
+		return nil, fmt.Errorf("error while unmarshalling buyers retrieved from database | %w", err)
 	}
 
 	for _, buyer := range buyerHolder.Buyers {
@@ -444,25 +454,25 @@ func (dataLoader *DataLoader) loadTransactions(errChan chan<- error, transaction
 	defer waitGroup.Done()
 	fmt.Println("Loading transactions...")
 
-	rawTransactions, tErr := dataLoader.fetchTransactionsFromAWS()
-	if tErr != nil {
-		errChan <- tErr
+	rawTransactions, err := dataLoader.fetchTransactionsFromAWS()
+	if err != nil {
+		errChan <- err
 		return
 	}
 
 	var transactions []Transaction = dataLoader.parseTransactions(rawTransactions)
-	jsonTransactions, mErr := json.Marshal(transactions)
+	jsonTransactions, err := json.Marshal(transactions)
 
-	if mErr != nil {
-		fmt.Printf("Error while marshalling transactions for database persistence | %v\n", mErr)
-		errChan <- mErr
+	if err != nil {
+		fmt.Printf("Error while marshalling transactions for database persistence | %v\n", err)
+		errChan <- err
 		return
 	}
 
-	persistErr := dataLoader.persistTransactions(jsonTransactions)
+	err = dataLoader.persistTransactions(jsonTransactions)
 
-	if persistErr != nil {
-		errChan <- fmt.Errorf("failed to persist transactions | %w", persistErr)
+	if err != nil {
+		errChan <- fmt.Errorf("failed to persist transactions | %w", err)
 		return
 	}
 
@@ -471,17 +481,17 @@ func (dataLoader *DataLoader) loadTransactions(errChan chan<- error, transaction
 }
 
 func (dataLoader *DataLoader) fetchTransactionsFromAWS() ([]string, error) {
-	req, reqErr := http.NewRequest("GET", c.TransactionsURL, nil)
+	req, err := http.NewRequest("GET", c.TransactionsURL, nil)
 
-	if reqErr != nil {
-		fmt.Printf("Error in GET request '%s' | %v \n", c.TransactionsURL, reqErr)
-		return nil, reqErr
+	if err != nil {
+		fmt.Printf("Error in GET request '%s' | %v \n", c.TransactionsURL, err)
+		return nil, err
 	}
 
 	q := req.URL.Query()
-	timestamp, tErr := f.DateStringToTimestamp(dataLoader.dateStr)
-	if tErr != nil {
-		return nil, tErr
+	timestamp, err := f.DateStringToTimestamp(dataLoader.dateStr)
+	if err != nil {
+		return nil, err
 	}
 
 	var dateAsTimestamp string = fmt.Sprint(timestamp)
@@ -490,18 +500,23 @@ func (dataLoader *DataLoader) fetchTransactionsFromAWS() ([]string, error) {
 	req.URL.RawQuery = q.Encode()
 	query := req.URL.String()
 
-	resp, resErr := http.Get(query)
-	if resErr != nil {
-		fmt.Printf("Error in response for GET request '%s' | %v\n", query, resErr)
-		return nil, resErr
+	resp, err := http.Get(query)
+	if err != nil {
+		fmt.Printf("Error in response for GET request '%s' | %v\n", query, err)
+		return nil, err
 	}
 
-	body, bodyErr := io.ReadAll(resp.Body)
-	if bodyErr != nil {
-		fmt.Printf("Error while reading response body of GET request '%s' | %v\n", query, bodyErr)
-		return nil, bodyErr
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error while reading response body of GET request '%s' | %v\n", query, err)
+		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = resp.Body.Close()
+	}()
+	if err != nil {
+		return nil, err
+	}
 
 	//Replace null characters with '||'
 	bodyWithBars := strings.ReplaceAll(string(body), "\x00", "|")
@@ -567,10 +582,10 @@ func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) error
 */
 func (dataLoader *DataLoader) isDateRequestable() (bool, error) {
 	//Parse the date to the format the database uses for dates: RFC3339
-	t, parseErr := time.Parse(c.DateLayout, dataLoader.dateStr)
-	if parseErr != nil {
-		fmt.Printf("Error while parsing string '%s' to date | %v\n", dataLoader.dateStr, parseErr)
-		return false, parseErr
+	t, err := time.Parse(c.DateLayout, dataLoader.dateStr)
+	if err != nil {
+		fmt.Printf("Error while parsing string '%s' to date | %v\n", dataLoader.dateStr, err)
+		return false, err
 	}
 
 	date := t.Format(c.DateLayoutRFC3339)
@@ -581,10 +596,10 @@ func (dataLoader *DataLoader) isDateRequestable() (bool, error) {
 			  }
 	  }`, date)
 
-	res, resErr := dataLoader.txn.Query(ctx, query)
-	if resErr != nil {
-		fmt.Printf("Error while making query: '%s' to database | %v\n", query, resErr)
-		return false, resErr
+	res, err := dataLoader.txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while making query: '%s' to database | %v\n", query, err)
+		return false, err
 	}
 
 	resultSize := res.Metrics.NumUids["uid"]

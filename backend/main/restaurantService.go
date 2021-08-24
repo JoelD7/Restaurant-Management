@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Usar mapa
 const buyerIdKey key = "buyerId"
 const dateKey key = "date"
 const productsKey key = "products"
@@ -28,6 +29,7 @@ const pageSizeTKey key = "pageSizeT"
 
 func Cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		// Setear Origins con ENV
 		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		writter.Header().Set("Access-Control-Allow-Credentials", "true")
 		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -42,26 +44,27 @@ func Cors(next http.Handler) http.Handler {
 	Extracts the request body and adds it to
 	the context so that the handlers can use it.
 */
-func RestaurantCtx(next http.Handler) http.Handler {
+func restaurantCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
 
 		//To solve CORS preflight invalid status error
-		if request.Method == "OPTIONS" {
+		if request.Method == http.MethodOptions {
 			writter.WriteHeader(http.StatusOK)
 			return
 		}
 
-		body, bodyReadErr := io.ReadAll(request.Body)
+		body, err := io.ReadAll(request.Body)
 
-		if bodyReadErr != nil {
-			http.Error(writter, bodyReadErr.Error(), http.StatusUnprocessableEntity)
+		if err != nil {
+			http.Error(writter, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		var requestBody RequestBody
-		uErr := json.Unmarshal(body, &requestBody)
-		if uErr != nil {
-			http.Error(writter, uErr.Error(), http.StatusUnprocessableEntity)
+		err = json.Unmarshal(body, &requestBody)
+		if err != nil {
+			http.Error(writter, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		ctx := context.WithValue(request.Context(), dateKey, requestBody.Date)
@@ -73,6 +76,12 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	requestContext := request.Context()
 	date, okParam := requestContext.Value(dateKey).(string)
 
+	if !okParam {
+		http.Error(writter, http.StatusText(http.StatusUnprocessableEntity),
+			http.StatusUnprocessableEntity)
+		return
+	}
+
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -81,33 +90,28 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 		txn:     txn,
 	}
 
-	validDate, dateErr := dataLoader.isDateRequestable()
-	if dateErr != nil {
-		http.Error(writter, dateErr.Error(), http.StatusUnprocessableEntity)
+	validDate, err := dataLoader.isDateRequestable()
+	if err != nil {
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
 	if !validDate {
-		http.Error(writter, fmt.Sprintf("La fecha '%s' ya ha sido sincronizada", dataLoader.dateStr), http.StatusBadRequest)
+		http.Error(writter, fmt.Sprintf("date already synchronized: '%s'", dataLoader.dateStr), http.StatusBadRequest)
 		return
 	}
 
-	res, loadErr := dataLoader.loadRestaurantData()
-	if loadErr != nil {
-		err := fmt.Errorf("error while loading restaurant data: %w", loadErr)
+	res, err := dataLoader.loadRestaurantData()
+	if err != nil {
+		err = fmt.Errorf("error while loading restaurant data: %w", err)
 
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
 	writter.WriteHeader(http.StatusCreated)
-	writter.Write([]byte(res))
+	writter.Write(res)
 
-	if !okParam {
-		http.Error(writter, http.StatusText(http.StatusUnprocessableEntity),
-			http.StatusUnprocessableEntity)
-		return
-	}
 }
 
 func getBuyers(writter http.ResponseWriter, request *http.Request) {
@@ -135,23 +139,23 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 	  }
 	`
 
-	totalBuyers, countErr := countEntities(countQuery)
-	if countErr != nil {
-		http.Error(writter, countErr.Error(), http.StatusUnprocessableEntity)
+	totalBuyers, err := countEntities(countQuery)
+	if err != nil {
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
-	qRes, qErr := txn.Query(ctx, query)
-	if qErr != nil {
-		http.Error(writter, qErr.Error(), http.StatusUnprocessableEntity)
+	qRes, err := txn.Query(ctx, query)
+	if err != nil {
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
 	type Buyers struct{ Buyers []Buyer }
 	var result Buyers
-	uErr := json.Unmarshal(qRes.Json, &result)
-	if uErr != nil {
-		http.Error(writter, uErr.Error(), http.StatusUnprocessableEntity)
+	err = json.Unmarshal(qRes.Json, &result)
+	if err != nil {
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
@@ -160,9 +164,9 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 		Count:  totalBuyers,
 	}
 
-	jsonRes, jsonErr := json.Marshal(response)
-	if jsonErr != nil {
-		http.Error(writter, jsonErr.Error(), http.StatusUnprocessableEntity)
+	jsonRes, err := json.Marshal(response)
+	if err != nil {
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
@@ -173,15 +177,15 @@ func countEntities(countQuery string) (int, error) {
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
-	cRes, cErr := txn.Query(ctx, countQuery)
-	if cErr != nil {
-		return 0, cErr
+	cRes, err := txn.Query(ctx, countQuery)
+	if err != nil {
+		return 0, err
 	}
 
 	var collectionCount CollectionCount
-	uErr := json.Unmarshal(cRes.Json, &collectionCount)
-	if uErr != nil {
-		return 0, uErr
+	err = json.Unmarshal(cRes.Json, &collectionCount)
+	if err != nil {
+		return 0, err
 	}
 
 	return collectionCount.CountArray[0].Total, nil
@@ -246,21 +250,21 @@ func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (
 	pageSizeTParam := request.URL.Query().Get("pageSizeT")
 
 	if pageBParam != "" && pageSizeBParam != "" && pageTParam != "" && pageSizeTParam != "" {
-		pageB, pageBErr := strconv.Atoi(pageBParam)
-		if pageBErr != nil {
-			return BuyerRequestParams{}, pageBErr
+		pageB, err := strconv.Atoi(pageBParam)
+		if err != nil {
+			return BuyerRequestParams{}, err
 		}
-		pageSizeB, pageSizeBErr := strconv.Atoi(pageSizeBParam)
-		if pageSizeBErr != nil {
-			return BuyerRequestParams{}, pageSizeBErr
+		pageSizeB, err := strconv.Atoi(pageSizeBParam)
+		if err != nil {
+			return BuyerRequestParams{}, err
 		}
-		pageT, pageTErr := strconv.Atoi(pageTParam)
-		if pageTErr != nil {
-			return BuyerRequestParams{}, pageTErr
+		pageT, err := strconv.Atoi(pageTParam)
+		if err != nil {
+			return BuyerRequestParams{}, err
 		}
-		pageSizeT, pageSizeTErr := strconv.Atoi(pageSizeTParam)
-		if pageSizeTErr != nil {
-			return BuyerRequestParams{}, pageSizeTErr
+		pageSizeT, err := strconv.Atoi(pageSizeTParam)
+		if err != nil {
+			return BuyerRequestParams{}, err
 		}
 
 		return BuyerRequestParams{
@@ -280,15 +284,15 @@ func BuyersCtx(next http.Handler) http.Handler {
 		pageSizeParam := request.URL.Query().Get("pageSize")
 
 		if pageParam != "" && pageSizeParam != "" {
-			page, e := strconv.Atoi(pageParam)
-			if e != nil {
-				http.Error(writter, e.Error(), http.StatusUnprocessableEntity)
+			page, err := strconv.Atoi(pageParam)
+			if err != nil {
+				http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 				return
 			}
 
-			pageSize, er := strconv.Atoi(pageSizeParam)
-			if er != nil {
-				http.Error(writter, er.Error(), http.StatusUnprocessableEntity)
+			pageSize, err := strconv.Atoi(pageSizeParam)
+			if err != nil {
+				http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 				return
 			}
 
@@ -306,9 +310,9 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	buyerId := ctx.Value(buyerIdKey).(string)
 
-	buyerTransactions, transErr := getTransactionHistory(buyerId)
-	if transErr != nil {
-		err := fmt.Errorf("error while fetching buyer | %w", transErr)
+	buyerTransactions, err := getTransactionHistory(buyerId)
+	if err != nil {
+		err := fmt.Errorf("error while fetching buyer | %w", err)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
@@ -319,9 +323,9 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		buyerIps = append(buyerIps, transaction.Ip)
 	}
 
-	transactionsForIps, transForIpErr := getTransactionsForIps(buyerIps)
-	if transForIpErr != nil {
-		err := fmt.Errorf("error while fetching buyer | %w", transForIpErr)
+	transactionsForIps, err := getTransactionsForIps(buyerIps)
+	if err != nil {
+		err := fmt.Errorf("error while fetching buyer | %w", err)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
@@ -332,25 +336,25 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		buyerIds = append(buyerIds, transaction.BuyerId)
 	}
 
-	buyersById, buyerErr := getBuyersById(buyerIds, buyerId)
-	if buyerErr != nil {
-		err := fmt.Errorf("error while fetching buyer | %w", buyerErr)
+	buyersById, err := getBuyersById(buyerIds, buyerId)
+	if err != nil {
+		err = fmt.Errorf("error while fetching buyer | %w", err)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
-	recommendedProducts, productErr := getProductRecommendations(buyerTransactions.Transactions)
-	if productErr != nil {
-		err := fmt.Errorf("error while fetching buyer | %w", productErr)
+	recommendedProducts, err := getProductRecommendations(buyerTransactions.Transactions)
+	if err != nil {
+		err := fmt.Errorf("error while fetching buyer | %w", err)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
 	transactionHistory, buyersWithSameIp := getPagedCollections(request, buyerTransactions, buyersById)
 
-	buyerName, bnErr := fetchBuyerName(buyerId)
-	if bnErr != nil {
-		http.Error(writter, bnErr.Error(), http.StatusUnprocessableEntity)
+	buyerName, err := fetchBuyerName(buyerId)
+	if err != nil {
+		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
@@ -361,10 +365,10 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		RecommendedProducts: recommendedProducts,
 	}
 
-	dataToReturnAsJson, mErr := json.Marshal(dataToReturn)
+	dataToReturnAsJson, err := json.Marshal(dataToReturn)
 
-	if mErr != nil {
-		err := fmt.Errorf("error while marshalling dataToReturn: %v", mErr)
+	if err != nil {
+		err = fmt.Errorf("error while marshalling dataToReturn: %v", err)
 		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
@@ -392,9 +396,9 @@ func getTransactionHistory(buyerId string) (TransactionCollection, error) {
 		}
 	  `, buyerId)
 
-	totalTransactions, countErr := countEntities(countQuery)
-	if countErr != nil {
-		return TransactionCollection{}, countErr
+	totalTransactions, err := countEntities(countQuery)
+	if err != nil {
+		return TransactionCollection{}, err
 	}
 
 	res, err := txn.Query(ctx, query)
@@ -404,11 +408,11 @@ func getTransactionHistory(buyerId string) (TransactionCollection, error) {
 	}
 
 	var transactionHistory TransactionHolder
-	uErr := json.Unmarshal(res.Json, &transactionHistory)
+	err = json.Unmarshal(res.Json, &transactionHistory)
 
-	if uErr != nil {
-		fmt.Printf("Error while unmarshalling transactions from database | %v", uErr)
-		return TransactionCollection{}, uErr
+	if err != nil {
+		fmt.Printf("Error while unmarshalling transactions from database | %v", err)
+		return TransactionCollection{}, err
 	}
 
 	return TransactionCollection{
@@ -435,10 +439,10 @@ func getTransactionsForIps(ips []string) ([]Transaction, error) {
 	}
 
 	var transactionsForIps TransactionHolder
-	uErr := json.Unmarshal(res.Json, &transactionsForIps)
-	if uErr != nil {
-		fmt.Printf("Error while unmarshalling transactions for the specified ip addresses | %v\n", uErr)
-		return nil, uErr
+	err = json.Unmarshal(res.Json, &transactionsForIps)
+	if err != nil {
+		fmt.Printf("Error while unmarshalling transactions for the specified ip addresses | %v\n", err)
+		return nil, err
 	}
 
 	return transactionsForIps.Transactions, nil
@@ -466,9 +470,9 @@ func getBuyersById(buyerIds []string, buyerId string) (BuyerCollection, error) {
 		}
 	}`, fmt.Sprint(buyerIds), buyerId)
 
-	totalBuyers, countErr := countEntities(countQuery)
-	if countErr != nil {
-		return BuyerCollection{}, countErr
+	totalBuyers, err := countEntities(countQuery)
+	if err != nil {
+		return BuyerCollection{}, err
 	}
 
 	res, err := txn.Query(ctx, query)
@@ -478,10 +482,10 @@ func getBuyersById(buyerIds []string, buyerId string) (BuyerCollection, error) {
 	}
 
 	var buyersById BuyersById
-	uErr := json.Unmarshal(res.Json, &buyersById)
-	if uErr != nil {
-		fmt.Printf("Error while unmarshalling buyersById | %v", uErr)
-		return BuyerCollection{}, uErr
+	err = json.Unmarshal(res.Json, &buyersById)
+	if err != nil {
+		fmt.Printf("Error while unmarshalling buyersById | %v", err)
+		return BuyerCollection{}, err
 	}
 
 	return BuyerCollection{
@@ -497,10 +501,10 @@ func getProductRecommendations(buyerTransactions []Transaction) ([]Product, erro
 		boughtProducts = append(boughtProducts, transaction.Products...)
 	}
 
-	similarProductTransactions, productErr := getSimilarProductTransactions(boughtProducts)
-	if productErr != nil {
-		fmt.Println(productErr)
-		return nil, productErr
+	similarProductTransactions, err := getSimilarProductTransactions(boughtProducts)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
 	}
 
 	var productIdsBuffer []string
@@ -521,17 +525,17 @@ func getProductRecommendations(buyerTransactions []Transaction) ([]Product, erro
 		}
 	  }`, productIds)
 
-	productsRes, queryErr := txn.Query(ctx, query)
-	if queryErr != nil {
-		fmt.Printf("Error while fetching products: %v\n", queryErr)
-		return nil, queryErr
+	productsRes, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while fetching products: %v\n", err)
+		return nil, err
 	}
 
 	var productHolder ProductHolder
-	uErr := json.Unmarshal(productsRes.Json, &productHolder)
-	if uErr != nil {
-		fmt.Printf("Error while unmarshaling products | %v\n", uErr)
-		return nil, uErr
+	err = json.Unmarshal(productsRes.Json, &productHolder)
+	if err != nil {
+		fmt.Printf("Error while unmarshaling products | %v\n", err)
+		return nil, err
 	}
 
 	recommendedProducts := filterRepeatedProducts(productHolder.Products)
@@ -553,18 +557,18 @@ func getSimilarProductTransactions(boughtProducts []string) ([]Transaction, erro
 		}
 	  }`, boughtProducts)
 
-	transactionsRes, queryErr := txn.Query(ctx, query)
-	if queryErr != nil {
-		fmt.Printf("Error while fetching transactions with products bought by this buyer: %v\n", queryErr)
-		return nil, queryErr
+	transactionsRes, err := txn.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("Error while fetching transactions with products bought by this buyer: %v\n", err)
+		return nil, err
 	}
 
 	var transactionsForBuyerProductsRes TransactionHolder
-	uErr := json.Unmarshal(transactionsRes.Json, &transactionsForBuyerProductsRes)
+	err = json.Unmarshal(transactionsRes.Json, &transactionsForBuyerProductsRes)
 
-	if uErr != nil {
-		fmt.Printf("Error while unmarshalling transactions | %v\n", uErr)
-		return nil, uErr
+	if err != nil {
+		fmt.Printf("Error while unmarshalling transactions | %v\n", err)
+		return nil, err
 	}
 
 	return transactionsForBuyerProductsRes.Transactions, nil
@@ -679,9 +683,9 @@ func fetchBuyerName(buyerId string) (string, error) {
 		return "", err
 	}
 
-	uErr := json.Unmarshal(res.Json, &bn)
-	if uErr != nil {
-		return "", uErr
+	err = json.Unmarshal(res.Json, &bn)
+	if err != nil {
+		return "", err
 	}
 
 	return bn.BuyerName[0].Name, nil
