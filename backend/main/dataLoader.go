@@ -88,10 +88,11 @@ func (dataLoader *DataLoader) loadRestaurantData() ([]byte, error) {
 
 	select {
 	case loadError := <-errorChan:
-		close(errorChan)
 		return nil, loadError
 
 	case <-wgDone:
+		dataLoader.txn.Commit(context.Background())
+
 		dataLoaded := &LoadResponse{
 			Buyers:       <-buyersChan,
 			Products:     <-productsChan,
@@ -114,23 +115,27 @@ func (dataLoader *DataLoader) loadProducts(errChan chan<- error, productsChan ch
 	rawProductsLines, pErr := dataLoader.fetchProductsFromAWS()
 	if pErr != nil {
 		errChan <- pErr
+		return
 	}
 
 	products, parseErr := dataLoader.parseProducts(rawProductsLines)
 	if parseErr != nil {
 		errChan <- fmt.Errorf("error while parsing products | %w", parseErr)
+		return
 	}
 
 	jsonProducts, jsonErr := json.Marshal(products)
 	if jsonErr != nil {
 		fmt.Printf("Error while marshalling products for database upload | %v\n", jsonErr)
 		errChan <- jsonErr
+		return
 	}
 
 	persistErr := dataLoader.persistProducts(jsonProducts)
 	if persistErr != nil {
 		fmt.Println(persistErr)
 		errChan <- persistErr
+		return
 	}
 
 	productsChan <- products
@@ -263,17 +268,14 @@ func (dataLoader *DataLoader) getPersistedProductsIds() ([]string, error) {
 
 func (dataLoader *DataLoader) persistProducts(jsonProducts []byte) error {
 	mutation := &api.Mutation{
-		SetJson:   jsonProducts,
-		CommitNow: true,
+		SetJson: jsonProducts,
 	}
 
 	req := &api.Request{
 		Mutations: []*api.Mutation{mutation},
-		CommitNow: true,
 	}
 
-	_, err := dgraphClient.NewTxn().Do(context.Background(), req)
-	// fmt.Println(len(res.GetUids()))//GOOD! This is the total of added products
+	_, err := dataLoader.txn.Do(context.Background(), req)
 
 	if err != nil {
 		fmt.Printf("Error while persisting new products | %v\n", err)
@@ -291,6 +293,7 @@ func (dataLoader *DataLoader) loadBuyers(errChan chan<- error, buyersChan chan<-
 	unfilteredBuyers, uErr := dataLoader.fetchBuyersFromAWS()
 	if uErr != nil {
 		errChan <- uErr
+		return
 	}
 
 	var buyers []BuyerUnmarshall
@@ -298,6 +301,7 @@ func (dataLoader *DataLoader) loadBuyers(errChan chan<- error, buyersChan chan<-
 	addedBuyerIds, bErr := dataLoader.getPersistedBuyersIds()
 	if bErr != nil {
 		errChan <- bErr
+		return
 	}
 
 	for _, b := range unfilteredBuyers {
@@ -311,17 +315,20 @@ func (dataLoader *DataLoader) loadBuyers(errChan chan<- error, buyersChan chan<-
 	if mErr != nil {
 		fmt.Printf("Error while marshalling buyers object for database persistence |%v\n", mErr)
 		errChan <- mErr
+		return
 	}
 
 	persistErr := dataLoader.persistBuyers(jsonBuyers)
 	if persistErr != nil {
 		errChan <- fmt.Errorf("error while persisting buyers | %w", persistErr)
+		return
 	}
 
 	var buyersRes []Buyer
 	err := json.Unmarshal(jsonBuyers, &buyersRes)
 	if err != nil {
 		errChan <- err
+		return
 	}
 
 	buyersChan <- buyersRes
@@ -415,16 +422,14 @@ func (dataLoader *DataLoader) marshalBuyers(buyers *[]BuyerUnmarshall) ([]byte, 
 
 func (dataLoader *DataLoader) persistBuyers(jsonBuyers []byte) error {
 	mutation := &api.Mutation{
-		SetJson:   jsonBuyers,
-		CommitNow: true,
+		SetJson: jsonBuyers,
 	}
 
 	req := &api.Request{
 		Mutations: []*api.Mutation{mutation},
-		CommitNow: true,
 	}
 
-	_, err := dgraphClient.NewTxn().Do(context.Background(), req)
+	_, err := dataLoader.txn.Do(context.Background(), req)
 
 	if err != nil {
 		fmt.Printf("Error while persisting buyers to database: %v", err)
@@ -442,6 +447,7 @@ func (dataLoader *DataLoader) loadTransactions(errChan chan<- error, transaction
 	rawTransactions, tErr := dataLoader.fetchTransactionsFromAWS()
 	if tErr != nil {
 		errChan <- tErr
+		return
 	}
 
 	var transactions []Transaction = dataLoader.parseTransactions(rawTransactions)
@@ -450,12 +456,14 @@ func (dataLoader *DataLoader) loadTransactions(errChan chan<- error, transaction
 	if mErr != nil {
 		fmt.Printf("Error while marshalling transactions for database persistence | %v\n", mErr)
 		errChan <- mErr
+		return
 	}
 
 	persistErr := dataLoader.persistTransactions(jsonTransactions)
 
 	if persistErr != nil {
 		errChan <- fmt.Errorf("failed to persist transactions | %w", persistErr)
+		return
 	}
 
 	transactionsChan <- transactions
@@ -539,8 +547,7 @@ func (dataLoader *DataLoader) parseTransactions(rawTransactions []string) []Tran
 func (dataLoader *DataLoader) persistTransactions(jsonTransactions []byte) error {
 	defer f.TimeTrack(time.Now(), "persistTransactions")
 	mutation := &api.Mutation{
-		SetJson:   jsonTransactions,
-		CommitNow: true,
+		SetJson: jsonTransactions,
 	}
 
 	_, err := dataLoader.txn.Mutate(context.Background(), mutation)
