@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 
+	f "module/utils"
+
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/go-chi/chi/v5"
@@ -48,7 +50,7 @@ var descriptor []APIDescriptor = []APIDescriptor{
 	},
 }
 
-const port string = "9000"
+var port string = f.GoDotEnvVariable("BACKEND_PORT")
 
 func main() {
 
@@ -56,7 +58,7 @@ func main() {
 
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
-	router.Use(Cors)
+	router.Use(corsMiddleware)
 
 	router.Route("/", func(router chi.Router) {
 		router.Get("/", describeAPI)
@@ -69,29 +71,31 @@ func main() {
 	})
 
 	router.Route("/buyer", func(router chi.Router) {
-		router.Use(BuyersCtx)
+		router.Use(buyersCtx)
 		router.Get("/all", getBuyers)
 
 		router.Route("/{buyerId}", func(router chi.Router) {
-			router.Use(BuyerCtx)
+			router.Use(buyerCtx)
 			router.Get("/", getBuyer)
 		})
 	})
 
 	router.Route("/products", func(router chi.Router) {
-		router.Use(ProductsCtx)
+		router.Use(productsCtx)
 
 		router.Get("/", getProducts)
 	})
 
 	fmt.Printf("Server listening on port %s\n", port)
-	// Manejar error de ListenAndServe
-	http.ListenAndServe(":"+port, router)
 
+	err := http.ListenAndServe(":"+port, router)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func newDGraphClient() *dgo.Dgraph {
-	target := "localhost:9080"
+	target := f.GoDotEnvVariable("DGRAPH_ALPHA")
 	clientConn, err := grpc.Dial(target, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(fmt.Errorf("error ocurred while trying to establish connection with '%s': %w", target, err))

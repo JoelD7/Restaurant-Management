@@ -12,25 +12,26 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 )
 
-// Usar mapa
-const buyerIdKey key = "buyerId"
-const dateKey key = "date"
-const productsKey key = "products"
-const pageKey key = "page"
-const pageSizeKey key = "pageSize"
-const pageBKey key = "pageB"
-const pageSizeBKey key = "pageSizeB"
-const pageTKey key = "pageT"
-const pageSizeTKey key = "pageSizeT"
+const (
+	buyerIdKey   key = "buyerId"
+	dateKey      key = "date"
+	productsKey  key = "products"
+	pageKey      key = "page"
+	pageSizeKey  key = "pageSize"
+	pageBKey     key = "pageB"
+	pageSizeBKey key = "pageSizeB"
+	pageTKey     key = "pageT"
+	pageSizeTKey key = "pageSizeT"
+)
 
-func Cors(next http.Handler) http.Handler {
+func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		// Setear Origins con ENV
-		writter.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		writter.Header().Set("Access-Control-Allow-Origin", f.GoDotEnvVariable("ALLOWED_ORIGIN"))
 		writter.Header().Set("Access-Control-Allow-Credentials", "true")
 		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 		writter.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -63,7 +64,7 @@ func restaurantCtx(next http.Handler) http.Handler {
 		var requestBody RequestBody
 		err = json.Unmarshal(body, &requestBody)
 		if err != nil {
-			http.Error(writter, err.Error(), http.StatusBadRequest)
+			http.Error(writter, "Error while processing request", http.StatusBadRequest)
 			return
 		}
 
@@ -75,10 +76,15 @@ func restaurantCtx(next http.Handler) http.Handler {
 func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	requestContext := request.Context()
 	date, okParam := requestContext.Value(dateKey).(string)
+	err := isDateParamValid(date)
+
+	if err != nil {
+		http.Error(writter, "Invalid date", http.StatusBadRequest)
+		return
+	}
 
 	if !okParam {
-		http.Error(writter, http.StatusText(http.StatusUnprocessableEntity),
-			http.StatusUnprocessableEntity)
+		http.Error(writter, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
@@ -112,6 +118,20 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	writter.WriteHeader(http.StatusCreated)
 	writter.Write(res)
 
+}
+
+/*
+	Validates the date parameter by checking if it matches
+	the layout used by Dgraph to store dates: yyyy-MM-DD.
+	Returns an error if it doesn't and nil if it matches.
+*/
+func isDateParamValid(date string) error {
+	_, err := time.Parse(c.DateLayout, date)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getBuyers(writter http.ResponseWriter, request *http.Request) {
@@ -191,9 +211,9 @@ func countEntities(countQuery string) (int, error) {
 	return collectionCount.CountArray[0].Total, nil
 }
 
-func ProductsCtx(next http.Handler) http.Handler {
+func productsCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		products := request.URL.Query().Get("products")
+		products := request.URL.Query().Get(string(productsKey))
 
 		ctx := context.WithValue(request.Context(), productsKey, products)
 		next.ServeHTTP(writter, request.WithContext(ctx))
@@ -224,13 +244,18 @@ func getProducts(writter http.ResponseWriter, request *http.Request) {
 	writter.Write(res.Json)
 }
 
-func BuyerCtx(next http.Handler) http.Handler {
+func buyerCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		buyerId := chi.URLParam(request, "buyerId")
+		buyerId := chi.URLParam(request, string(buyerIdKey))
+
+		if !isBuyerIdParamValid(buyerId) {
+			http.Error(writter, "Invalid buyerId", http.StatusBadRequest)
+			return
+		}
 
 		buyerReqParams, err := getBuyerRequestParams(writter, request)
 		if err != nil {
-			http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+			http.Error(writter, "Invalid request parameters", http.StatusBadRequest)
 			return
 		}
 
@@ -243,11 +268,35 @@ func BuyerCtx(next http.Handler) http.Handler {
 	})
 }
 
+/*
+	Validates de "buyerId" parameter by determining if it
+	is an alphanumeric string and if it has the expected length.
+*/
+func isBuyerIdParamValid(buyerId string) bool {
+	if len(buyerId) > 8 {
+		return false
+	}
+
+	var digitCounter int
+	var letterCounter int
+	for _, char := range buyerId {
+		if unicode.IsDigit(char) {
+			digitCounter++
+		}
+
+		if unicode.IsLetter(char) {
+			letterCounter++
+		}
+	}
+
+	return (digitCounter + letterCounter) == len(buyerId)
+}
+
 func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (BuyerRequestParams, error) {
-	pageBParam := request.URL.Query().Get("pageB")
-	pageSizeBParam := request.URL.Query().Get("pageSizeB")
-	pageTParam := request.URL.Query().Get("pageT")
-	pageSizeTParam := request.URL.Query().Get("pageSizeT")
+	pageBParam := request.URL.Query().Get(string(pageBKey))
+	pageSizeBParam := request.URL.Query().Get(string(pageSizeBKey))
+	pageTParam := request.URL.Query().Get(string(pageTKey))
+	pageSizeTParam := request.URL.Query().Get(string(pageSizeTKey))
 
 	if pageBParam != "" && pageSizeBParam != "" && pageTParam != "" && pageSizeTParam != "" {
 		pageB, err := strconv.Atoi(pageBParam)
@@ -278,10 +327,10 @@ func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (
 	return BuyerRequestParams{}, fmt.Errorf("missing parameter")
 }
 
-func BuyersCtx(next http.Handler) http.Handler {
+func buyersCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		pageParam := request.URL.Query().Get("page")
-		pageSizeParam := request.URL.Query().Get("pageSize")
+		pageParam := request.URL.Query().Get(string(pageKey))
+		pageSizeParam := request.URL.Query().Get(string(pageSizeKey))
 
 		if pageParam != "" && pageSizeParam != "" {
 			page, err := strconv.Atoi(pageParam)

@@ -2,8 +2,12 @@ package utils
 
 import (
 	"fmt"
+	"log"
 	c "module/constants"
+	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func DateStringToTimestamp(str string) (int64, error) {
@@ -30,4 +34,14 @@ func ArrayContains(array []string, element string) bool {
 func TimeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
 	fmt.Printf("%s took %s\n", name, elapsed)
+}
+
+func GoDotEnvVariable(key string) string {
+	err := godotenv.Load("../.env")
+
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
+	return os.Getenv(key)
 }
