@@ -1,113 +1,45 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"math/rand"
 	c "module/constants"
-	f "module/utils"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/go-chi/chi/v5"
 )
 
 const (
-	buyerIdKey   key = "buyerId"
-	dateKey      key = "date"
-	productsKey  key = "products"
-	pageKey      key = "page"
-	pageSizeKey  key = "pageSize"
-	pageBKey     key = "pageB"
-	pageSizeBKey key = "pageSizeB"
-	pageTKey     key = "pageT"
-	pageSizeTKey key = "pageSizeT"
+	DateError  string = "DateError"
+	OtherError string = "OtherError"
 )
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		writter.Header().Set("Access-Control-Allow-Origin", f.GoDotEnvVariable("ALLOWED_ORIGIN"))
-		writter.Header().Set("Access-Control-Allow-Credentials", "true")
-		writter.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-		writter.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		writter.Header().Set("Content-Type", "application/json")
-
-		next.ServeHTTP(writter, request)
-	})
-}
-
-/*
-	Extracts the request body and adds it to
-	the context so that the handlers can use it.
-*/
-func restaurantCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		//To solve CORS preflight invalid status error
-		if request.Method == http.MethodOptions {
-			writter.WriteHeader(http.StatusOK)
-			return
-		}
-
-		body, err := io.ReadAll(request.Body)
-		if err != nil {
-			http.Error(writter, "Error while processing request body", http.StatusInternalServerError)
-			return
-		}
-
-		var requestBody RequestBody
-		err = json.Unmarshal(body, &requestBody)
-		if err != nil {
-			http.Error(writter, "Error while processing request", http.StatusBadRequest)
-			return
-		}
-
-		ctx := context.WithValue(request.Context(), dateKey, requestBody.Date)
-		next.ServeHTTP(writter, request.WithContext(ctx))
-	})
-}
-
-func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
-	requestContext := request.Context()
-	date := requestContext.Value(dateKey).(string)
-	err := isDateParamValid(date)
+func startDataLoading(dataLoader *DataLoader) ([]byte, string, error) {
+	err := isDateParamValid(dataLoader.dateStr)
 
 	if err != nil {
-		http.Error(writter, "Invalid date", http.StatusBadRequest)
-		return
+		return nil, DateError, fmt.Errorf("invalid date")
 	}
 
 	txn := dgraphClient.NewTxn()
 	defer txn.Discard(ctx)
 
-	dataLoader := &DataLoader{
-		dateStr: date,
-		txn:     txn,
-	}
-
 	validDate, err := dataLoader.isDateRequestable()
 	if err != nil {
-		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		return nil, OtherError, err
 	}
 
 	if !validDate {
-		http.Error(writter, fmt.Sprintf("date already synchronized: '%s'", dataLoader.dateStr), http.StatusBadRequest)
-		return
+		return nil, DateError, fmt.Errorf("date already synchronized: '%s'", dataLoader.dateStr)
 	}
 
 	res, err := dataLoader.loadRestaurantData()
 	if err != nil {
-		http.Error(writter, "error while loading restaurant data", http.StatusInternalServerError)
-		return
+		return nil, OtherError, err
 	}
 
-	writter.WriteHeader(http.StatusCreated)
-	writter.Write(res)
+	return res, "", nil
 }
 
 /*
@@ -122,28 +54,6 @@ func isDateParamValid(date string) error {
 	}
 
 	return nil
-}
-
-func buyersCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/buyer/all" {
-			pageParam := request.URL.Query().Get(string(pageKey))
-			pageSizeParam := request.URL.Query().Get(string(pageSizeKey))
-
-			page, pageSize, err := validatePageParams(pageParam, pageSizeParam)
-			if err != nil {
-				http.Error(writter, err.Error(), http.StatusBadRequest)
-				return
-			}
-
-			ctx := context.WithValue(request.Context(), pageKey, page)
-			ctx = context.WithValue(ctx, pageSizeKey, pageSize)
-			next.ServeHTTP(writter, request.WithContext(ctx))
-		} else {
-			next.ServeHTTP(writter, request)
-		}
-
-	})
 }
 
 func validatePageParams(pageParam string, pageSizeParam string) (int, int, error) {
@@ -169,94 +79,13 @@ func validatePageParams(pageParam string, pageSizeParam string) (int, int, error
 
 }
 
-func getBuyers(writter http.ResponseWriter, request *http.Request) {
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	ctx := request.Context()
-	page := ctx.Value(pageKey).(int)
-	pageSize := ctx.Value(pageSizeKey).(int)
-	offset := pageSize * page
-
-	query := fmt.Sprintf(`
-	{
-		buyers(func: type(Buyer), offset: %v, first: %v){
-			  expand(_all_){}
-		}
-	  }
-	`, offset, pageSize)
-
-	countQuery := `
-	{
-		CountArray(func: type(Buyer)){
-			  total: count(uid)
-		}
-	  }
-	`
-
-	totalBuyers, err := countEntities(countQuery)
+func fetchBuyers(page int, pageSize int) ([]byte, error) {
+	res, err := fetchBuyersFromDB(page, pageSize)
 	if err != nil {
-		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	qRes, err := txn.Query(ctx, query)
-	if err != nil {
-		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	type Buyers struct{ Buyers []Buyer }
-	var result Buyers
-	err = json.Unmarshal(qRes.Json, &result)
-	if err != nil {
-		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	response := &BuyerCollection{
-		Buyers: result.Buyers,
-		Count:  totalBuyers,
-	}
-
-	jsonRes, err := json.Marshal(response)
-	if err != nil {
-		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	writter.Write(jsonRes)
-}
-
-func countEntities(countQuery string) (int, error) {
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	cRes, err := txn.Query(ctx, countQuery)
-	if err != nil {
-		return 0, err
-	}
-
-	var collectionCount CollectionCount
-	err = json.Unmarshal(cRes.Json, &collectionCount)
-	if err != nil {
-		return 0, err
-	}
-
-	return collectionCount.CountArray[0].Total, nil
-}
-
-func productsCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		products := request.URL.Query().Get(string(productsKey))
-		if !isProductParamValid(products) {
-			http.Error(writter, "Invalid products", http.StatusBadRequest)
-			return
-		}
-
-		ctx := context.WithValue(request.Context(), productsKey, products)
-		next.ServeHTTP(writter, request.WithContext(ctx))
-	})
+	return res, nil
 }
 
 /*
@@ -296,52 +125,13 @@ func isProductParamValid(products string) bool {
 	return true
 }
 
-func getProducts(writter http.ResponseWriter, request *http.Request) {
-	ctx := request.Context()
-	products := ctx.Value(productsKey).(string)
-	productList := strings.Split(products, ",")
-
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	query := fmt.Sprintf(`{
-		products(func: type(Product)) 
-			@filter(anyofterms(ProductId, "%s")) {
-			  expand(_all_){}
-		}
-	  }`, productList)
-
-	res, err := txn.Query(ctx, query)
+func fetchProducts(productIds string) ([]byte, error) {
+	productsJson, err := fetchProductsFromDB(productIds)
 	if err != nil {
-		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	writter.Write(res.Json)
-}
-
-func buyerCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		buyerId := chi.URLParam(request, string(buyerIdKey))
-
-		if !isBuyerIdParamValid(buyerId) {
-			http.Error(writter, "Invalid buyerId", http.StatusBadRequest)
-			return
-		}
-
-		buyerReqParams, err := getBuyerRequestParams(writter, request)
-		if err != nil {
-			http.Error(writter, "Invalid request parameters", http.StatusBadRequest)
-			return
-		}
-
-		ctx := context.WithValue(request.Context(), buyerIdKey, buyerId)
-		ctx = context.WithValue(ctx, pageBKey, buyerReqParams.PageBParam)
-		ctx = context.WithValue(ctx, pageSizeBKey, buyerReqParams.PageSizeBParam)
-		ctx = context.WithValue(ctx, pageTKey, buyerReqParams.PageTParam)
-		ctx = context.WithValue(ctx, pageSizeTKey, buyerReqParams.PageSizeTParam)
-		next.ServeHTTP(writter, request.WithContext(ctx))
-	})
+	return productsJson, nil
 }
 
 /*
@@ -368,12 +158,7 @@ func isBuyerIdParamValid(buyerId string) bool {
 	return (digitCounter + letterCounter) == len(buyerId)
 }
 
-func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (BuyerRequestParams, error) {
-	pageBParam := request.URL.Query().Get(string(pageBKey))
-	pageSizeBParam := request.URL.Query().Get(string(pageSizeBKey))
-	pageTParam := request.URL.Query().Get(string(pageTKey))
-	pageSizeTParam := request.URL.Query().Get(string(pageSizeTKey))
-
+func getBuyerRequestParams(pageBParam string, pageSizeBParam string, pageTParam string, pageSizeTParam string) (BuyerRequestParams, error) {
 	if pageBParam != "" && pageSizeBParam != "" && pageTParam != "" && pageSizeTParam != "" {
 		pageB, err := strconv.Atoi(pageBParam)
 		if err != nil {
@@ -413,14 +198,10 @@ func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (
 	return BuyerRequestParams{}, fmt.Errorf("missing parameter")
 }
 
-func getBuyer(writter http.ResponseWriter, request *http.Request) {
-	ctx := request.Context()
-	buyerId := ctx.Value(buyerIdKey).(string)
-
-	buyerTransactions, err := getTransactionHistory(buyerId)
+func fetchBuyer(buyerId string, buyerReqParams BuyerRequestParams) ([]byte, error) {
+	buyerTransactions, err := fetchTransactionHistoryFromDB(buyerId)
 	if err != nil {
-		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	var buyerIps []string
@@ -429,10 +210,9 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		buyerIps = append(buyerIps, transaction.Ip)
 	}
 
-	transactionsForIps, err := getTransactionsForIps(buyerIps)
+	transactionsForIps, err := fetchTransactionsForIpsFromDB(buyerIps)
 	if err != nil {
-		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	var buyerIds []string
@@ -441,27 +221,24 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 		buyerIds = append(buyerIds, transaction.BuyerId)
 	}
 
-	buyersById, err := getBuyersById(buyerIds, buyerId)
+	buyersById, err := fetchBuyersByIdFromDB(buyerIds, buyerId)
 	if err != nil {
 		fmt.Printf("error while fetching buyer | %v\n", err)
-		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	recommendedProducts, err := getProductRecommendations(buyerTransactions.Transactions)
+	recommendedProducts, err := fetchProductRecommendationsFromDB(buyerTransactions.Transactions)
 	if err != nil {
 		fmt.Printf("error while fetching buyer | %v\n", err)
-		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	transactionHistory, buyersWithSameIp := getPagedCollections(request, buyerTransactions, buyersById)
+	transactionHistory, buyersWithSameIp := getPagedCollections(buyerReqParams, buyerTransactions, buyersById)
 
-	buyerName, err := fetchBuyerName(buyerId)
+	buyerName, err := fetchBuyerNameFromDB(buyerId)
 	if err != nil {
 		fmt.Printf("error while fetching buyer | %v\n", err)
-		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	dataToReturn := &BuyerIdEndpoint{
@@ -475,222 +252,22 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 
 	if err != nil {
 		fmt.Printf("Error while marshalling dataToReturn | %v\n", err)
-		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
-		return
-	}
-
-	writter.Write(dataToReturnAsJson)
-}
-
-func getTransactionHistory(buyerId string) (TransactionCollection, error) {
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	query := fmt.Sprintf(`{
-		transactions(func: type(Transaction)) 
-			@filter(eq(BuyerId, "%s")) {
-			  expand(_all_){}
-		}
-	  }`, buyerId)
-
-	countQuery := fmt.Sprintf(`
-	  {
-		  CountArray(func: type(Transaction))
-			  @filter(eq(BuyerId, "%s")){
-				total: count(uid)
-		  }
-		}
-	  `, buyerId)
-
-	totalTransactions, err := countEntities(countQuery)
-	if err != nil {
-		return TransactionCollection{}, err
-	}
-
-	res, err := txn.Query(ctx, query)
-	if err != nil {
-		fmt.Printf("Error while retrieving transaction history for buyer %s: %v\n", buyerId, err)
-		return TransactionCollection{}, err
-	}
-
-	var transactionHistory TransactionHolder
-	err = json.Unmarshal(res.Json, &transactionHistory)
-
-	if err != nil {
-		fmt.Printf("Error while unmarshalling transactions from database | %v", err)
-		return TransactionCollection{}, err
-	}
-
-	return TransactionCollection{
-		Transactions: transactionHistory.Transactions,
-		Count:        totalTransactions,
-	}, nil
-}
-
-func getTransactionsForIps(ips []string) ([]Transaction, error) {
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	query := fmt.Sprintf(`{
-		transactions(func: type(Transaction))
-			@filter(anyofterms(Ip, "%s")) {
-			  expand(_all_){}
-		}
-	  }`, fmt.Sprint(ips))
-
-	res, err := txn.Query(ctx, query)
-	if err != nil {
-		fmt.Printf("Error while retrieving transaction for the specified ip addresses: %v\n", err)
 		return nil, err
 	}
 
-	var transactionsForIps TransactionHolder
-	err = json.Unmarshal(res.Json, &transactionsForIps)
-	if err != nil {
-		fmt.Printf("Error while unmarshalling transactions for the specified ip addresses | %v\n", err)
-		return nil, err
-	}
-
-	return transactionsForIps.Transactions, nil
-
-}
-
-func getBuyersById(buyerIds []string, buyerId string) (BuyerCollection, error) {
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	query := fmt.Sprintf(`{
-		buyersById(func: type(Buyer))
-			@filter(anyofterms(BuyerId, "%s") and not anyofterms(BuyerId, "%s")) {
-			  BuyerId
-			  Age
-			  Name
-			  Date
-		}
-	}`, fmt.Sprint(buyerIds), buyerId)
-
-	countQuery := fmt.Sprintf(`{
-	CountArray(func: type(Buyer))
-			@filter(anyofterms(BuyerId, "%s") and not anyofterms(BuyerId, "%s")) {
-				total: count(uid)
-		}
-	}`, fmt.Sprint(buyerIds), buyerId)
-
-	totalBuyers, err := countEntities(countQuery)
-	if err != nil {
-		return BuyerCollection{}, err
-	}
-
-	res, err := txn.Query(ctx, query)
-	if err != nil {
-		fmt.Printf("Error while retrieving buyers: %v\n", err)
-		return BuyerCollection{}, err
-	}
-
-	var buyersById BuyersById
-	err = json.Unmarshal(res.Json, &buyersById)
-	if err != nil {
-		fmt.Printf("Error while unmarshalling buyersById | %v", err)
-		return BuyerCollection{}, err
-	}
-
-	return BuyerCollection{
-		Buyers: buyersById.Buyers,
-		Count:  totalBuyers,
-	}, nil
-}
-
-func getProductRecommendations(buyerTransactions []Transaction) ([]Product, error) {
-	var boughtProducts []string
-
-	for _, transaction := range buyerTransactions {
-		boughtProducts = append(boughtProducts, transaction.Products...)
-	}
-
-	similarProductTransactions, err := getSimilarProductTransactions(boughtProducts)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-
-	var productIdsBuffer []string
-	for _, transaction := range similarProductTransactions {
-		productIdsBuffer = append(productIdsBuffer, transaction.Products...)
-	}
-
-	//Filter out bought products
-	productIds := filterBoughtProductIds(boughtProducts, productIdsBuffer)
-
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	query := fmt.Sprintf(`{
-		products(func: type(Product)) 
-			@filter(anyofterms(ProductId, "%s")) {
-			  expand(_all_){}
-		}
-	  }`, productIds)
-
-	productsRes, err := txn.Query(ctx, query)
-	if err != nil {
-		fmt.Printf("Error while fetching products: %v\n", err)
-		return nil, err
-	}
-
-	var productHolder ProductHolder
-	err = json.Unmarshal(productsRes.Json, &productHolder)
-	if err != nil {
-		fmt.Printf("Error while unmarshaling products | %v\n", err)
-		return nil, err
-	}
-
-	recommendedProducts := filterRepeatedProducts(productHolder.Products)
-
-	return recommendedProducts, nil
-}
-
-/*
-	Returns transactions that contain products specified in @boughtProducts
-*/
-func getSimilarProductTransactions(boughtProducts []string) ([]Transaction, error) {
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	query := fmt.Sprintf(`{
-		transactions(func: type(Transaction), first: 10) 
-			@filter(anyofterms(Products, "%s")) {
-			  expand(_all_){}
-		}
-	  }`, boughtProducts)
-
-	transactionsRes, err := txn.Query(ctx, query)
-	if err != nil {
-		fmt.Printf("Error while fetching transactions with products bought by this buyer: %v\n", err)
-		return nil, err
-	}
-
-	var transactionsForBuyerProductsRes TransactionHolder
-	err = json.Unmarshal(transactionsRes.Json, &transactionsForBuyerProductsRes)
-
-	if err != nil {
-		fmt.Printf("Error while unmarshalling transactions | %v\n", err)
-		return nil, err
-	}
-
-	return transactionsForBuyerProductsRes.Transactions, nil
+	return dataToReturnAsJson, nil
 }
 
 /*
 	Applies pagination to the buyer's transactions and to the list of
 	buyers using the same IP.
 */
-func getPagedCollections(request *http.Request, buyerTransactions TransactionCollection,
+func getPagedCollections(buyerReqParams BuyerRequestParams, buyerTransactions TransactionCollection,
 	buyersById BuyerCollection) (TransactionCollection, BuyerCollection) {
-	ctx := request.Context()
-	pageB := ctx.Value(pageBKey).(int)
-	pageSizeB := ctx.Value(pageSizeBKey).(int)
-	pageT := ctx.Value(pageTKey).(int)
-	pageSizeT := ctx.Value(pageSizeTKey).(int)
+	pageB := buyerReqParams.PageBParam
+	pageSizeB := buyerReqParams.PageSizeBParam
+	pageT := buyerReqParams.PageTParam
+	pageSizeT := buyerReqParams.PageSizeTParam
 
 	var transactionHistory TransactionCollection
 
@@ -720,79 +297,4 @@ func getPagedCollections(request *http.Request, buyerTransactions TransactionCol
 	}
 
 	return transactionHistory, buyersWithSameIp
-}
-
-func filterBoughtProductIds(boughtProducts []string, productIdsBuffer []string) []string {
-	var filteredProductIds []string
-
-	for _, id := range productIdsBuffer {
-		if !f.ArrayContains(boughtProducts, id) && !f.ArrayContains(filteredProductIds, id) {
-			filteredProductIds = append(filteredProductIds, id)
-		}
-	}
-
-	return filteredProductIds
-}
-
-func filterRepeatedProducts(products []Product) []Product {
-	//Shuffle the array so that each time, new recommendations
-	//are generated.
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(products), func(i, j int) {
-		products[i], products[j] = products[j], products[i]
-	})
-
-	var addedIds []string
-	var result []Product = []Product{}
-
-	var max int
-	if len(products) < c.MaxProductRecommendations {
-		max = len(products)
-	} else {
-		max = c.MaxProductRecommendations
-	}
-
-	for _, product := range products {
-		if len(addedIds) >= max {
-			break
-		}
-
-		if !f.ArrayContains(addedIds, product.ProductId) {
-			addedIds = append(addedIds, product.ProductId)
-			result = append(result, product)
-		}
-	}
-
-	return result
-}
-
-func fetchBuyerName(buyerId string) (string, error) {
-	txn := dgraphClient.NewTxn()
-	defer txn.Discard(ctx)
-
-	query := fmt.Sprintf(`{
-		buyerName(func: type(Buyer))
-			@filter(eq(BuyerId, "%s")) {
-			  Name
-		}
-	}`, buyerId)
-
-	type BuyerName struct {
-		BuyerName []struct {
-			Name string
-		}
-	}
-	var bn BuyerName
-
-	res, err := txn.Query(ctx, query)
-	if err != nil {
-		return "", err
-	}
-
-	err = json.Unmarshal(res.Json, &bn)
-	if err != nil {
-		return "", err
-	}
-
-	return bn.BuyerName[0].Name, nil
 }
