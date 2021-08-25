@@ -178,10 +178,6 @@ func buyerCtx(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(request.Context(), buyerIdKey, buyerId)
-		// ctx = context.WithValue(ctx, pageBKey, buyerReqParams.PageBParam)
-		// ctx = context.WithValue(ctx, pageSizeBKey, buyerReqParams.PageSizeBParam)
-		// ctx = context.WithValue(ctx, pageTKey, buyerReqParams.PageTParam)
-		// ctx = context.WithValue(ctx, pageSizeTKey, buyerReqParams.PageSizeTParam)
 		ctx = context.WithValue(ctx, buyerParamsKey, buyerReqParams)
 		next.ServeHTTP(writter, request.WithContext(ctx))
 	})
