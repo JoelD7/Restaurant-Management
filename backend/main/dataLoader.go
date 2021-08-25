@@ -598,7 +598,6 @@ func (dataLoader *DataLoader) isDateRequestable() (bool, error) {
 
 	res, err := dataLoader.txn.Query(ctx, query)
 	if err != nil {
-		fmt.Printf("Error while making query: '%s' to database | %v\n", query, err)
 		return false, err
 	}
 

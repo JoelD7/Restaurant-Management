@@ -47,7 +47,6 @@ func corsMiddleware(next http.Handler) http.Handler {
 */
 func restaurantCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-
 		//To solve CORS preflight invalid status error
 		if request.Method == http.MethodOptions {
 			writter.WriteHeader(http.StatusOK)
@@ -55,9 +54,8 @@ func restaurantCtx(next http.Handler) http.Handler {
 		}
 
 		body, err := io.ReadAll(request.Body)
-
 		if err != nil {
-			http.Error(writter, err.Error(), http.StatusBadRequest)
+			http.Error(writter, "Error while processing request body", http.StatusInternalServerError)
 			return
 		}
 
@@ -75,16 +73,11 @@ func restaurantCtx(next http.Handler) http.Handler {
 
 func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	requestContext := request.Context()
-	date, okParam := requestContext.Value(dateKey).(string)
+	date := requestContext.Value(dateKey).(string)
 	err := isDateParamValid(date)
 
 	if err != nil {
 		http.Error(writter, "Invalid date", http.StatusBadRequest)
-		return
-	}
-
-	if !okParam {
-		http.Error(writter, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
@@ -98,7 +91,7 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 
 	validDate, err := dataLoader.isDateRequestable()
 	if err != nil {
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -109,15 +102,12 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 
 	res, err := dataLoader.loadRestaurantData()
 	if err != nil {
-		err = fmt.Errorf("error while loading restaurant data: %w", err)
-
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, "error while loading restaurant data", http.StatusInternalServerError)
 		return
 	}
 
 	writter.WriteHeader(http.StatusCreated)
 	writter.Write(res)
-
 }
 
 /*
@@ -132,6 +122,51 @@ func isDateParamValid(date string) error {
 	}
 
 	return nil
+}
+
+func buyersCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/buyer/all" {
+			pageParam := request.URL.Query().Get(string(pageKey))
+			pageSizeParam := request.URL.Query().Get(string(pageSizeKey))
+
+			page, pageSize, err := validatePageParams(pageParam, pageSizeParam)
+			if err != nil {
+				http.Error(writter, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			ctx := context.WithValue(request.Context(), pageKey, page)
+			ctx = context.WithValue(ctx, pageSizeKey, pageSize)
+			next.ServeHTTP(writter, request.WithContext(ctx))
+		} else {
+			next.ServeHTTP(writter, request)
+		}
+
+	})
+}
+
+func validatePageParams(pageParam string, pageSizeParam string) (int, int, error) {
+	if pageParam == "" && pageSizeParam == "" {
+		return 0, 0, fmt.Errorf("invalid page parameters")
+	}
+
+	page, err := strconv.Atoi(pageParam)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid page parameters")
+	}
+
+	pageSize, err := strconv.Atoi(pageSizeParam)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid page parameters")
+	}
+
+	if page < 0 || pageSize < 0 {
+		return 0, 0, fmt.Errorf("invalid page parameters")
+	}
+
+	return page, pageSize, nil
+
 }
 
 func getBuyers(writter http.ResponseWriter, request *http.Request) {
@@ -161,13 +196,13 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 
 	totalBuyers, err := countEntities(countQuery)
 	if err != nil {
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	qRes, err := txn.Query(ctx, query)
 	if err != nil {
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -175,7 +210,7 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 	var result Buyers
 	err = json.Unmarshal(qRes.Json, &result)
 	if err != nil {
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -186,7 +221,7 @@ func getBuyers(writter http.ResponseWriter, request *http.Request) {
 
 	jsonRes, err := json.Marshal(response)
 	if err != nil {
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -214,10 +249,51 @@ func countEntities(countQuery string) (int, error) {
 func productsCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
 		products := request.URL.Query().Get(string(productsKey))
+		if !isProductParamValid(products) {
+			http.Error(writter, "Invalid products", http.StatusBadRequest)
+			return
+		}
 
 		ctx := context.WithValue(request.Context(), productsKey, products)
 		next.ServeHTTP(writter, request.WithContext(ctx))
 	})
+}
+
+/*
+	Validates that "products" is a comma separated string
+	of valid productIds.
+*/
+func isProductParamValid(products string) bool {
+	productArr := strings.Split(products, ",")
+	var digitCounter int
+	var letterCounter int
+
+	for _, productId := range productArr {
+		fmt.Println(productId)
+
+		if len(productId) > 8 || len(productId) == 0 {
+			return false
+		}
+
+		for _, char := range productId {
+			if unicode.IsDigit(char) {
+				digitCounter++
+			}
+
+			if unicode.IsLetter(char) {
+				letterCounter++
+			}
+		}
+
+		if (digitCounter + letterCounter) != len(productId) {
+			return false
+		}
+
+		digitCounter = 0
+		letterCounter = 0
+	}
+
+	return true
 }
 
 func getProducts(writter http.ResponseWriter, request *http.Request) {
@@ -237,7 +313,7 @@ func getProducts(writter http.ResponseWriter, request *http.Request) {
 
 	res, err := txn.Query(ctx, query)
 	if err != nil {
-		http.Error(writter, err.Error(), http.StatusNotFound)
+		http.Error(writter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -303,17 +379,27 @@ func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (
 		if err != nil {
 			return BuyerRequestParams{}, err
 		}
+
 		pageSizeB, err := strconv.Atoi(pageSizeBParam)
 		if err != nil {
 			return BuyerRequestParams{}, err
 		}
+
 		pageT, err := strconv.Atoi(pageTParam)
 		if err != nil {
 			return BuyerRequestParams{}, err
 		}
+
 		pageSizeT, err := strconv.Atoi(pageSizeTParam)
 		if err != nil {
 			return BuyerRequestParams{}, err
+		}
+
+		if pageB <= 0 ||
+			pageSizeB <= 0 ||
+			pageT <= 0 ||
+			pageSizeT <= 0 {
+			return BuyerRequestParams{}, fmt.Errorf("invalid page parameters")
 		}
 
 		return BuyerRequestParams{
@@ -327,42 +413,13 @@ func getBuyerRequestParams(writter http.ResponseWriter, request *http.Request) (
 	return BuyerRequestParams{}, fmt.Errorf("missing parameter")
 }
 
-func buyersCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writter http.ResponseWriter, request *http.Request) {
-		pageParam := request.URL.Query().Get(string(pageKey))
-		pageSizeParam := request.URL.Query().Get(string(pageSizeKey))
-
-		if pageParam != "" && pageSizeParam != "" {
-			page, err := strconv.Atoi(pageParam)
-			if err != nil {
-				http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
-				return
-			}
-
-			pageSize, err := strconv.Atoi(pageSizeParam)
-			if err != nil {
-				http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
-				return
-			}
-
-			ctx := context.WithValue(request.Context(), pageKey, page)
-			ctx = context.WithValue(ctx, pageSizeKey, pageSize)
-			next.ServeHTTP(writter, request.WithContext(ctx))
-		} else {
-			next.ServeHTTP(writter, request)
-		}
-
-	})
-}
-
 func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	buyerId := ctx.Value(buyerIdKey).(string)
 
 	buyerTransactions, err := getTransactionHistory(buyerId)
 	if err != nil {
-		err := fmt.Errorf("error while fetching buyer | %w", err)
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
 		return
 	}
 
@@ -374,8 +431,7 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 
 	transactionsForIps, err := getTransactionsForIps(buyerIps)
 	if err != nil {
-		err := fmt.Errorf("error while fetching buyer | %w", err)
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
 		return
 	}
 
@@ -387,15 +443,15 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 
 	buyersById, err := getBuyersById(buyerIds, buyerId)
 	if err != nil {
-		err = fmt.Errorf("error while fetching buyer | %w", err)
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		fmt.Printf("error while fetching buyer | %v\n", err)
+		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
 		return
 	}
 
 	recommendedProducts, err := getProductRecommendations(buyerTransactions.Transactions)
 	if err != nil {
-		err := fmt.Errorf("error while fetching buyer | %w", err)
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		fmt.Printf("error while fetching buyer | %v\n", err)
+		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
 		return
 	}
 
@@ -403,7 +459,8 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 
 	buyerName, err := fetchBuyerName(buyerId)
 	if err != nil {
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		fmt.Printf("error while fetching buyer | %v\n", err)
+		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
 		return
 	}
 
@@ -417,8 +474,8 @@ func getBuyer(writter http.ResponseWriter, request *http.Request) {
 	dataToReturnAsJson, err := json.Marshal(dataToReturn)
 
 	if err != nil {
-		err = fmt.Errorf("error while marshalling dataToReturn: %v", err)
-		http.Error(writter, err.Error(), http.StatusUnprocessableEntity)
+		fmt.Printf("Error while marshalling dataToReturn | %v\n", err)
+		http.Error(writter, "Error while fetching buyer", http.StatusInternalServerError)
 		return
 	}
 

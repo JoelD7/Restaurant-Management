@@ -18,7 +18,7 @@ import (
 )
 
 type RequestBody struct {
-	Date string `json:"date"`
+	Date string `json:"date,omitempty"`
 }
 
 type APIDescriptor struct {
