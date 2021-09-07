@@ -48,6 +48,7 @@ func startDataLoading(dataLoader *DataLoader) ([]byte, string, error) {
 	Returns an error if it doesn't and nil if it matches.
 */
 func isDateParamValid(date string) error {
+	//date = ""
 	_, err := time.Parse(c.DateLayout, date)
 	if err != nil {
 		return err

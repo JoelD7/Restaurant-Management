@@ -81,7 +81,7 @@ func loadRestaurantData(writter http.ResponseWriter, request *http.Request) {
 	res, errorType, err := startDataLoading(dataLoader)
 	if err != nil {
 		if errorType == DateError {
-			http.Error(writter, err.Error(), http.StatusBadRequest)
+			http.Error(writter, "invalid date", http.StatusBadRequest)
 		} else {
 			http.Error(writter, "error while loading restaurant data", http.StatusInternalServerError)
 		}

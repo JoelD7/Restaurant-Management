@@ -55,7 +55,6 @@ var port string = f.GoDotEnvVariable("BACKEND_PORT")
 func main() {
 
 	router := chi.NewRouter()
-
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Use(corsMiddleware)
